@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TubeGuard</title>
+  <link rel="stylesheet" href="./popup.css">
+</head>
+<body>
+
+<header>
+  <h1>TubeGuard</h1>
+  <label class="toggle" title="Enable / disable blocking">
+    <input type="checkbox" id="enabled-toggle" checked>
+    <span class="slider"></span>
+  </label>
+</header>
+
+<div class="summary">
+  <div class="stat-cell">
+    <div class="stat-value" id="stat-blocked">—</div>
+    <div class="stat-label">Blocked channels</div>
+  </div>
+  <div class="stat-cell">
+    <div class="stat-value" id="stat-today">—</div>
+    <div class="stat-label">Watch time today</div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-label">Notifications</div>
+
+  <div class="row">
+    <label for="notif-toggle">Enable limit alerts</label>
+    <label class="toggle">
+      <input type="checkbox" id="notif-toggle">
+      <span class="slider"></span>
+    </label>
+  </div>
+
+  <div class="row">
+    <label for="daily-limit">Global daily limit</label>
+    <input type="number" id="daily-limit" min="0" max="9999" placeholder="min" title="Minutes per channel per day (0 = off)">
+  </div>
+</div>
+
+<footer>
+  <button class="btn-stats" id="open-stats">View Stats &amp; Blocked List</button>
+  <div class="status-text" id="status-text"></div>
+</footer>
+
+<script type="module" src="./popup.js"></script>
+</body>
+</html>

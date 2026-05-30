@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TubeGuard — Stats</title>
+  <link rel="stylesheet" href="./stats.css">
+</head>
+<body>
+
+<header>
+  <h1>TubeGuard</h1>
+  <div class="header-actions">
+    <button class="btn btn-secondary" id="export-stats-btn">⬇ Export Stats CSV</button>
+    <button class="btn btn-secondary" id="export-blocklist-btn">⬇ Export Blocklist CSV</button>
+  </div>
+</header>
+
+<main>
+
+  <!-- Summary cards -->
+  <div class="cards">
+    <div class="card">
+      <div class="card-value" id="blocked-channels">—</div>
+      <div class="card-label">Blocked Channels</div>
+    </div>
+    <div class="card">
+      <div class="card-value" id="blocked-videos">—</div>
+      <div class="card-label">Blocked Videos</div>
+    </div>
+    <div class="card">
+      <div class="card-value" id="blocked-comments">—</div>
+      <div class="card-label">Blocked Comments</div>
+    </div>
+    <div class="card">
+      <div class="card-value" id="blocked-playlists">—</div>
+      <div class="card-label">Blocked Playlists</div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="watchtime">Watch Time</button>
+    <button class="tab-btn"        data-tab="blocklist">Blocked List</button>
+  </div>
+
+  <!-- Watch Time tab -->
+  <div class="tab-panel active" id="tab-watchtime">
+
+    <!-- By channel -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">By Channel</span>
+        <div class="range-btns" id="range-btns">
+          <button class="range-btn active" data-days="7">7d</button>
+          <button class="range-btn"        data-days="14">14d</button>
+          <button class="range-btn"        data-days="30">30d</button>
+          <button class="range-btn"        data-days="60">60d</button>
+        </div>
+      </div>
+      <canvas class="chart-canvas" id="channel-chart" height="200"></canvas>
+      <div style="overflow-x:auto;margin-top:16px;">
+        <table class="data-table" id="channel-table">
+          <thead>
+            <tr>
+              <th data-col="channelName">Channel <span class="sort-icon desc"></span></th>
+              <th data-col="totalSeconds">Total Time <span class="sort-icon"></span></th>
+              <th data-col="avgPerDay">Avg / Day <span class="sort-icon"></span></th>
+              <th data-col="lastWatched">Last Watched <span class="sort-icon"></span></th>
+              <th>Daily Limit (min)</th>
+            </tr>
+          </thead>
+          <tbody id="channel-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- By video -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">By Video</span>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="data-table" id="video-table">
+          <thead>
+            <tr>
+              <th data-col="videoTitle">Title <span class="sort-icon desc"></span></th>
+              <th data-col="channelName">Channel <span class="sort-icon"></span></th>
+              <th data-col="totalSeconds">Total Time <span class="sort-icon"></span></th>
+              <th data-col="count">Times Watched <span class="sort-icon"></span></th>
+              <th data-col="lastWatched">Last Watched <span class="sort-icon"></span></th>
+            </tr>
+          </thead>
+          <tbody id="video-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- /tab-watchtime -->
+
+  <!-- Blocked List tab -->
+  <div class="tab-panel" id="tab-blocklist">
+    <div class="section">
+      <div class="blocklist-controls">
+        <input class="search-input" id="blocklist-search" type="search" placeholder="Search blocked items…">
+        <select class="filter-select" id="blocklist-filter">
+          <option value="">All types</option>
+          <option value="channel">Channels</option>
+          <option value="video">Videos</option>
+          <option value="comment">Comments</option>
+          <option value="playlist">Playlists</option>
+        </select>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="data-table" id="blocklist-table">
+          <thead>
+            <tr>
+              <th>Type</th>
+              <th>Name / ID</th>
+              <th>Blocked On</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="blocklist-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div><!-- /tab-blocklist -->
+
+</main>
+
+<script type="module" src="./stats.js"></script>
+</body>
+</html>
