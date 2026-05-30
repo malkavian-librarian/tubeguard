@@ -171,6 +171,8 @@ function styleBtn(text, bg, color, _dark) {
 // ── Block action ──────────────────────────────────────────────────────────────
 
 function doBlock(channelId, channelName, container) {
+  tryUnsubscribe(channelName);
+
   chrome.runtime.sendMessage({
     type:    MessageType.BLOCK_CHANNEL,
     payload: { channelId, channelName },
@@ -184,6 +186,46 @@ function doBlock(channelId, channelName, container) {
       payload: { channelId },
     }).catch(() => {});
   });
+}
+
+function tryUnsubscribe(channelName) {
+  if (!channelName) return;
+  const buttons = document.querySelectorAll('button');
+  let subBtn = null;
+  const lowerName = channelName.toLowerCase();
+
+  for (const btn of buttons) {
+    const aria = (btn.getAttribute('aria-label') || '').toLowerCase();
+    const text = btn.textContent.trim().toLowerCase();
+    
+    if (aria.includes('unsubscribe') && aria.includes(lowerName)) {
+      subBtn = btn;
+      break;
+    }
+    if (text === 'subscribed' && (location.href.includes('/@') || location.href.includes('/channel/') || location.href.includes('/watch'))) {
+      subBtn = btn;
+    }
+  }
+
+  if (subBtn) {
+    subBtn.click();
+    const checkDialog = setInterval(() => {
+      const dialogs = document.querySelectorAll('tp-yt-paper-dialog, yt-confirm-dialog-renderer');
+      for (const dialog of dialogs) {
+        if (!dialog.offsetParent) continue;
+        for (const cb of dialog.querySelectorAll('button')) {
+          const ct = cb.textContent.trim().toLowerCase();
+          const ca = (cb.getAttribute('aria-label') || '').toLowerCase();
+          if (ct === 'unsubscribe' || ca === 'unsubscribe') {
+            cb.click();
+            clearInterval(checkDialog);
+            return;
+          }
+        }
+      }
+    }, 150);
+    setTimeout(() => clearInterval(checkDialog), 3000);
+  }
 }
 
 // ── Toast ─────────────────────────────────────────────────────────────────────
