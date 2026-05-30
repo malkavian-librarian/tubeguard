@@ -2,7 +2,7 @@ import { MessageType, CHANNEL_ID_PATTERN, STATS_PAGE_PATH } from '../shared/cons
 import { settings, blocklistMeta, sessions } from '../shared/storage.js';
 import { onMessage } from '../shared/message-bus.js';
 import { registerAlarms, handleAlarm } from './alarm-manager.js';
-import { toDateString } from '../shared/utils.js';
+import { toDateString, dateRangeStart } from '../shared/utils.js';
 
 // ── Lifecycle ────────────────────────────────────────────────────────────────
 
@@ -36,6 +36,7 @@ onMessage(async (msg) => {
     case MessageType.UNBLOCK_VIDEO:   return unblockVideo(msg.payload);
     case MessageType.TRACK_SESSION:   return trackSession(msg.payload);
     case MessageType.SET_SETTING:     return setSetting(msg.payload);
+    case MessageType.GET_STATS:       return getStats(msg.payload);
     default: return null;
   }
 });
@@ -107,6 +108,20 @@ async function trackSession(data) {
 async function setSetting({ key, value }) {
   await settings.set({ [key]: value });
   return { ok: true };
+}
+
+async function getStats({ channelId }) {
+  const startDate = dateRangeStart(7);
+  const endDate   = toDateString();
+  const allSessions = await sessions.getByDateRange(startDate, endDate);
+  
+  let durationSecs = 0;
+  for (const s of allSessions) {
+    if (s.channelId === channelId || s.channelName === channelId) {
+      durationSecs += s.duration || 0;
+    }
+  }
+  return { hours: durationSecs / 3600 };
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

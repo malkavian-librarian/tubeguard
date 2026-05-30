@@ -23,6 +23,13 @@ export function removeBlockedVideo(id)      { blockedVideos.delete(id); }
 // ── Extraction helpers ────────────────────────────────────────────────────────
 
 export function extractChannelId(el) {
+  if (el.matches && el.matches('#page-header, ytd-c4-tabbed-header-renderer, ytd-channel-header-renderer')) {
+    const url = location.href;
+    const m1  = url.match(/youtube\.com\/channel\/(UC[\w-]{22})/);
+    const m2  = url.match(/youtube\.com\/@([\w.-]+)/);
+    if (m1) return m1[1];
+    if (m2) return `@${m2[1]}`;
+  }
   // /channel/UC... links
   for (const a of el.querySelectorAll('a[href*="/channel/"]')) {
     const m = (a.href || '').match(/\/channel\/(UC[\w-]{22})/);

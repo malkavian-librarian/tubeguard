@@ -72,6 +72,7 @@ export const SELECTORS = {
   // All video containers joined for a single querySelectorAll
   ALL_VIDEO_CONTAINERS: [
     'ytd-rich-item-renderer',
+    'ytd-rich-grid-media',
     'ytd-video-renderer',
     'ytd-compact-video-renderer',
     'ytd-grid-video-renderer',

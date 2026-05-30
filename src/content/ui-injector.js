@@ -7,7 +7,7 @@ const injected = new WeakSet();
 
 export function injectBlockButtons() {
   const containers = document.querySelectorAll(
-    SELECTORS.ALL_VIDEO_CONTAINERS + ', ' + SELECTORS.CHANNEL_RENDERER
+    SELECTORS.ALL_VIDEO_CONTAINERS + ', ' + SELECTORS.CHANNEL_RENDERER + ', ' + SELECTORS.CHANNEL_HEADER + ', #page-header, ytd-c4-tabbed-header-renderer'
   );
 
   for (const container of containers) {
@@ -15,8 +15,13 @@ export function injectBlockButtons() {
     const channelId = extractChannelId(container);
     if (!channelId) continue;
 
-    const anchor = container.querySelector(SELECTORS.CHANNEL_NAME_TEXT) ||
+    let anchor = container.querySelector(SELECTORS.CHANNEL_NAME_TEXT) ||
                    container.querySelector(SELECTORS.CHANNEL_LINK);
+    
+    if (!anchor && container.matches('#page-header, ytd-c4-tabbed-header-renderer, ytd-channel-header-renderer')) {
+      anchor = container.querySelector('#channel-name, yt-dynamic-text-view-model') || container.firstElementChild;
+    }
+
     if (!anchor) continue;
 
     const channelName = extractChannelName(container) || channelId;
@@ -45,6 +50,17 @@ function injectOnWatchPage() {
     const channelName = link.textContent.trim() || channelId;
     const btn         = makeBlockButton(channelId, channelName, null);
     link.insertAdjacentElement('afterend', btn);
+
+    const statsSpan = document.createElement('span');
+    statsSpan.style.cssText = 'margin-left:8px;font-size:13px;color:#888;font-weight:500;';
+    link.insertAdjacentElement('afterend', statsSpan);
+
+    chrome.runtime.sendMessage({ type: MessageType.GET_STATS, payload: { channelId } }).then(res => {
+      if (res && res.hours !== undefined) {
+        statsSpan.textContent = `(${res.hours.toFixed(1)}h this week)`;
+      }
+    }).catch(() => {});
+
     injected.add(link);
   }
 }
@@ -62,15 +78,14 @@ function makeBlockButton(channelId, channelName, container) {
   btn.setAttribute('title', 'Block this channel');
   btn.style.cssText = [
     'display:inline-flex;align-items:center;justify-content:center;',
-    'width:18px;height:18px;margin-left:5px;padding:0;',
-    'background:transparent;',
-    `border:1px solid ${isDark() ? '#888' : '#717171'};`,
-    'border-radius:3px;cursor:pointer;',
-    `color:${isDark() ? '#aaa' : '#717171'};`,
-    'font-size:11px;line-height:1;vertical-align:middle;flex-shrink:0;',
+    'padding:4px 8px;margin-left:8px;',
+    'background:#cc0000;',
+    'border:none;border-radius:4px;cursor:pointer;',
+    'color:#fff;font-weight:bold;',
+    'font-size:12px;line-height:1;vertical-align:middle;flex-shrink:0;',
     'position:relative;z-index:10;',
   ].join('');
-  btn.textContent = '⊘';
+  btn.textContent = 'BLOCK';
 
   btn.addEventListener('click', (e) => {
     e.preventDefault();
