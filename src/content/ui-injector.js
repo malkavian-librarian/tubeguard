@@ -51,16 +51,6 @@ function injectOnWatchPage() {
     const btn         = makeBlockButton(channelId, channelName, null);
     link.insertAdjacentElement('afterend', btn);
 
-    const statsSpan = document.createElement('span');
-    statsSpan.style.cssText = 'margin-left:8px;font-size:13px;color:#888;font-weight:500;';
-    link.insertAdjacentElement('afterend', statsSpan);
-
-    chrome.runtime.sendMessage({ type: MessageType.GET_STATS, payload: { channelId } }).then(res => {
-      if (res && res.hours !== undefined) {
-        statsSpan.textContent = `(${res.hours.toFixed(1)}h this week)`;
-      }
-    }).catch(() => {});
-
     injected.add(link);
   }
 }
@@ -72,13 +62,17 @@ function isDark() {
 }
 
 function makeBlockButton(channelId, channelName, container) {
+  const wrapper = document.createElement('span');
+  wrapper.className = 'tubeguard-block-wrapper';
+  wrapper.style.cssText = 'display:inline-flex;align-items:center;vertical-align:middle;margin-left:8px;';
+
   const btn = document.createElement('button');
   btn.className  = 'tubeguard-block-btn';
   btn.setAttribute('aria-label', `Block channel: ${channelName}`);
   btn.setAttribute('title', 'Block this channel');
   btn.style.cssText = [
     'display:inline-flex;align-items:center;justify-content:center;',
-    'padding:4px 8px;margin-left:8px;',
+    'padding:4px 8px;',
     'background:#cc0000;',
     'border:none;border-radius:4px;cursor:pointer;',
     'color:#fff;font-weight:bold;',
@@ -93,7 +87,30 @@ function makeBlockButton(channelId, channelName, container) {
     showConfirmPopover(btn, channelId, channelName, container);
   });
 
-  return btn;
+  wrapper.appendChild(btn);
+
+  const statsChip = document.createElement('span');
+  statsChip.className = 'tubeguard-stats-chip';
+  statsChip.style.cssText = [
+    'display:none;align-items:center;justify-content:center;',
+    'padding:4px 8px;margin-left:6px;',
+    'background:#ff9800;',
+    'border:none;border-radius:4px;',
+    'color:#fff;font-weight:bold;',
+    'font-size:12px;line-height:1;vertical-align:middle;flex-shrink:0;',
+    'position:relative;z-index:10;'
+  ].join('');
+
+  chrome.runtime.sendMessage({ type: MessageType.GET_STATS, payload: { channelId } }).then(res => {
+    if (res && res.hours !== undefined && res.hours > 0) {
+      statsChip.textContent = `${res.hours.toFixed(1)}h`;
+      statsChip.style.display = 'inline-flex';
+    }
+  }).catch(() => {});
+
+  wrapper.appendChild(statsChip);
+
+  return wrapper;
 }
 
 // ── Confirmation popover ──────────────────────────────────────────────────────

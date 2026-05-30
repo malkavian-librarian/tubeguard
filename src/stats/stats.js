@@ -111,7 +111,7 @@ function renderChannelTable(channels) {
     const avgSec = c.totalSeconds / currentDays;
 
     tr.innerHTML = `
-      <td>${esc(c.channelName)}</td>
+      <td class="highlight-name">${esc(c.channelName)}</td>
       <td>${formatDuration(c.totalSeconds)}</td>
       <td>${formatDuration(avgSec)}/day</td>
       <td>${c.lastWatched}</td>
@@ -154,7 +154,7 @@ function renderVideoTable(videos) {
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${esc(v.videoTitle)}</td>
-      <td>${esc(v.channelName)}</td>
+      <td class="highlight-name">${esc(v.channelName)}</td>
       <td>${formatDuration(v.totalSeconds)}</td>
       <td>${v.count}</td>
       <td>${v.lastWatched}</td>

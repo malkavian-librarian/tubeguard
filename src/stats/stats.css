@@ -206,6 +206,11 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px; }
 
 .data-table tr:hover td { background: var(--surface2); }
 
+.data-table td.highlight-name {
+  color: #ff9800;
+  font-weight: 500;
+}
+
 .sort-icon { opacity: .4; font-size: 10px; }
 .sort-icon.asc::after  { content: ' ▲'; }
 .sort-icon.desc::after { content: ' ▼'; }
