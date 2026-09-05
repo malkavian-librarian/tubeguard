@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>TubeGuard · Learning priorities</title><link rel="stylesheet" href="options.css"></head>
+<body><main>
+<header><p class="eyebrow">TUBEGUARD / YOUR ATTENTION</p><h1>Make room for learning.</h1><p>Choose your priorities. Keep a record of what you watch.</p></header>
+<nav aria-label="Settings sections"><a href="#settings">Priorities</a><a href="#history">Watch history</a><a href="#audit">Decision log</a><a href="#data">Your data</a></nav>
+<p id="status" role="status" aria-live="polite"></p>
+<section id="settings"><h2>Learning priorities</h2>
+<form id="settings-form">
+<label for="priorities">What do you want to learn?</label><textarea id="priorities" rows="6" placeholder="Teach me about AI, new perspectives on AI, and investing. Entertainment unrelated to these goals is irrelevant." required></textarea>
+<p class="hint">Changing priorities starts a new watch-time total. Existing blocks remain.</p>
+<div class="columns"><div><label for="model">OpenRouter GLM model</label><input id="model" value="z-ai/glm-4.7" required></div><div><label for="api-key">OpenRouter API key</label><input id="api-key" type="password" autocomplete="new-password" placeholder="Paste a new key"><p id="key-status" class="hint">No key saved.</p></div></div>
+<label class="check"><input id="clear-key" type="checkbox">Remove saved key</label>
+<div class="columns"><div><label for="request-budget">Maximum requests per 24 hours</label><input id="request-budget" type="number" min="1" max="1000" value="50"></div><div><label for="byte-budget">Maximum input bytes per 24 hours</label><input id="byte-budget" type="number" min="24576" max="16777216" value="1048576"></div></div>
+<p>When enabled, selected titles, descriptions, transcript excerpts and these priorities are sent to OpenRouter and its model provider. History and logs stay on this computer. Block IDs can sync through Chrome.</p>
+<label class="check"><input id="ai-enabled" type="checkbox">Enable daily analysis and silent automatic blocking</label>
+<p class="hint">Videos longer than 5 minutes qualify, even if partly watched. A channel is blocked after more than 30 minutes of irrelevant viewing across days under these priorities. Incomplete transcripts do not count. Requests may incur OpenRouter charges.</p>
+<button type="submit">Save priorities</button><button id="run-now" type="button" class="secondary">Analyze now</button>
+</form><p id="schedule" class="hint"></p><p id="storage-status" class="hint"></p></section>
+<section id="history"><div class="section-heading"><h2>Watch history</h2><button id="refresh-history" class="secondary">Refresh</button></div><div id="history-list"></div><button id="history-more" class="secondary" hidden>Load more</button></section>
+<section id="audit"><div class="section-heading"><h2>Decision log</h2><button id="refresh-log" class="secondary">Refresh</button></div>
+<label for="log-kind">Show</label><select id="log-kind"><option value="classification">Video assessments</option><option value="action">Channel block decisions</option><option value="run">Daily runs</option><option value="attempt">Model requests and errors</option></select>
+<div id="log-list"></div><button id="log-more" class="secondary" hidden>Load more</button></section>
+<section id="data"><h2>Your data</h2><p>History is stored in this Chrome profile until you delete it or storage fills. Uninstalling the extension can remove it. Export contains private viewing information; your API key is excluded.</p>
+<button id="export" class="secondary">Export local data</button><label class="check"><input id="remove-automatic-blocks" type="checkbox">Also remove channels blocked automatically by this feature</label><button id="delete" class="danger">Delete history and decision log</button>
+<p class="hint">Deletion disables capture and analysis. Existing blocks and ordinary watch-time statistics remain. Unblock channels individually from the decision log or the original stats page.</p></section>
+</main><script type="module" src="options.js"></script></body></html>

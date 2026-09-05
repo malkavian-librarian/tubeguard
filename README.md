@@ -8,6 +8,8 @@ Let's be real: YouTube is designed to keep you clicking. This extension is a hea
 TubeGuard is a Manifest V3 Chrome extension that:
 - **Blocks channels and videos** you don't want to see by injecting "Block" buttons directly into the YouTube UI.
 - **Tracks your watch time** locally via an IndexedDB cache so you know exactly how many hours you've wasted.
+- **Optionally evaluates learning value each day** with an OpenRouter GLM model, using priorities you set in the extension.
+- **Keeps an auditable local record** of captured evidence, classifications, run settings, errors, and automatic channel blocks.
 - **Works purely through DOM manipulation**. No fancy network-level `webRequest` blocking here. It literally finds the HTML elements you hate, sets `display: none`, and deletes them from the page before you can click them.
 
 ## The Brutal Truth
@@ -32,10 +34,16 @@ This extension isn't on the Chrome Web Store (yet). To install it locally:
 6. Click **Load unpacked** and select the project root directory.
 
 ## Development
+- **Unit tests:** `npm run test`
+- **Browser integration test:** `npm run test:e2e`
 - **Watch mode:** `npm run build:watch`
 - **Package for Web Store:** `npm run zip`
 
-We use ES modules everywhere and bundle only the service worker and content script via `esbuild`. The stats and popup pages load ES modules directly.
+We use ES modules everywhere and bundle the service worker, content script, and small YouTube page bridge via `esbuild`. The stats, options, and popup pages load ES modules directly.
+
+Open **Learning priorities** from the popup to enable analysis, enter an OpenRouter key, and set the outcomes or subjects you want to prioritize. Videos longer than five minutes enter local history once active watch time is recorded. Every 24 hours, or when you select **Analyze now**, eligible evidence is sent in bounded requests. A channel is silently blocked after its deduplicated irrelevant watch time is strictly greater than 30 minutes under the current priorities.
+
+The API key is stored in trusted local extension storage and is excluded from history, logs, and exports. Titles, descriptions, transcript excerpts, runs, and decisions remain in the local Chrome profile. Transcript capture is best effort because YouTube may withhold caption data; the history records an explicit unavailable or partial status when that happens.
 
 ## Future Features & Telemetry (Coming Soon)
 A few things are currently in the works and will be pushed in future updates:

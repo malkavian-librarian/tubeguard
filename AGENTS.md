@@ -1,6 +1,6 @@
-# CLAUDE.md — TubeGuard Chrome Extension
+# AGENTS.md — TubeGuard Chrome Extension
 
-This file documents project conventions, architecture decisions, and build instructions for Claude Code working in this repository. Read this before making any changes.
+This file documents project conventions, architecture decisions, and build instructions for Codex working in this repository. Read this before making any changes.
 
 ---
 

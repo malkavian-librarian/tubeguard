@@ -39,7 +39,9 @@ export function sendToTab(tabId, type, payload = {}) {
 export function onMessage(handler) {
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (!msg || !VALID_TYPES.has(msg.type)) return false;
-    const result = handler(msg, sender);
+    let result;
+    try { result = handler(msg, sender); }
+    catch (err) { sendResponse({requestId:msg.requestId,ok:false,error:{code:err.code||'INVALID_INPUT',message:'Request rejected'}});return false; }
     if (result instanceof Promise) {
       result
         .then(sendResponse)

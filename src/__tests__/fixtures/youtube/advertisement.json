@@ -1,0 +1,7 @@
+{
+  "scenario": "advertisement",
+  "videoId": "AdG4pV1d30X",
+  "activeVideoId": "AdG4pV1d30X",
+  "owner": { "channelId": "UCdefghijklmnopqrstuvwxy", "href": "/channel/UCdefghijklmnopqrstuvwxy" },
+  "player": { "videoId": "AdG4pV1d30X", "durationSeconds": 800, "isLive": false, "adPlaying": true, "captions": [] }
+}

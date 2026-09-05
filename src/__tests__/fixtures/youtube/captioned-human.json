@@ -1,0 +1,30 @@
+{
+  "scenario": "captioned-human",
+  "videoId": "a1b2c3d4e5F",
+  "activeVideoId": "a1b2c3d4e5F",
+  "owner": {
+    "channelId": "UCabcdefghijklmnopqrstuv",
+    "handle": "@synthetic-learning",
+    "href": "/channel/UCabcdefghijklmnopqrstuv"
+  },
+  "player": {
+    "videoId": "a1b2c3d4e5F",
+    "durationSeconds": 901,
+    "isLive": false,
+    "adPlaying": false,
+    "captions": [
+      {
+        "kind": "human",
+        "language": "en",
+        "url": "https://www.youtube.com/api/timedtext?v=a1b2c3d4e5F&lang=en&fmt=json3"
+      }
+    ]
+  },
+  "transcript": {
+    "format": "json3",
+    "segments": [
+      { "startMs": 0, "endMs": 1800, "text": "Synthetic lesson introduction." },
+      { "startMs": 1800, "endMs": 4100, "text": "A bounded human caption sample." }
+    ]
+  }
+}

@@ -19,9 +19,7 @@ async function bootstrap() {
     enabled:  prefs.enabled,
   });
 
-  if (!prefs.enabled) return;
-
-  startObserver();
+  if (prefs.enabled) startObserver();
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', onReady);

@@ -1,14 +1,21 @@
 {
-  "name": "tubeguard",
-  "version": "0.1.0",
-  "description": "Block channels, track your watch time, and take back control of YouTube.",
-  "type": "module",
-  "scripts": {
-    "build": "esbuild src/background/service-worker.js src/content/content-main.js --bundle --outdir=build --format=esm --entry-names=[name]",
-    "build:watch": "esbuild src/background/service-worker.js src/content/content-main.js --bundle --outdir=build --format=esm --entry-names=[name] --watch",
-    "zip": "powershell -Command \"Compress-Archive -Path build,src/stats,src/popup,src/shared,assets,manifest.json -DestinationPath tubeguard.zip -Force\""
-  },
-  "devDependencies": {
-    "esbuild": "^0.21.0"
-  }
+    "name": "tubeguard",
+    "version": "0.1.0",
+    "description": "Block channels, track your watch time, and take back control of YouTube.",
+    "type": "module",
+    "scripts": {
+        "build": "esbuild ./src/background/service-worker.js ./src/content/content-main.js ./src/content/youtube-bridge.js --bundle --outdir=build --format=esm --entry-names=[name]",
+        "build:watch": "esbuild ./src/background/service-worker.js ./src/content/content-main.js ./src/content/youtube-bridge.js --bundle --outdir=build --format=esm --entry-names=[name] --watch",
+        "test": "vitest run --configLoader native",
+        "test:watch": "vitest --configLoader native",
+        "zip": "powershell -Command \"Compress-Archive -Path build,src/stats,src/popup,src/options,src/shared,assets,manifest.json -DestinationPath tubeguard.zip -Force\"",
+        "test:e2e": "npm run build && playwright test"
+    },
+    "devDependencies": {
+        "@playwright/test": "1.63.0",
+        "esbuild": "0.28.2",
+        "fake-indexeddb": "6.0.1",
+        "jsdom": "26.1.0",
+        "vitest": "3.2.7"
+    }
 }

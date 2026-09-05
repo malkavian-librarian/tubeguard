@@ -1,0 +1,7 @@
+{
+  "scenario": "stale-spa",
+  "videoId": "N3wV1d30abc",
+  "activeVideoId": "N3wV1d30abc",
+  "owner": { "channelId": "UCcdefghijklmnopqrstuvwx", "href": "/channel/UCcdefghijklmnopqrstuvwx" },
+  "player": { "videoId": "OldV1d30abc", "durationSeconds": 620, "isLive": false, "adPlaying": false, "captions": [] }
+}

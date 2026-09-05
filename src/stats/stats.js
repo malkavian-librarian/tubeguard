@@ -18,7 +18,7 @@ let currentTab   = 'watchtime';
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
 async function init() {
   [allSessions, allMeta, syncSettings] = await Promise.all([
-    sessions.getAll(),
+    sessions.getByDateRange(dateRangeStart(60), toDateString()),
     blocklistMeta.getAll(),
     settings.get(),
   ]);
@@ -27,6 +27,7 @@ async function init() {
   renderWatchTimeTab();
   renderBlocklistTab();
   bindEvents();
+  const learning=document.createElement('a');learning.href=chrome.runtime.getURL('src/options/options.html');learning.textContent='Learning priorities, history & decision log';document.body.prepend(learning);
 }
 
 // ── Cards ─────────────────────────────────────────────────────────────────────

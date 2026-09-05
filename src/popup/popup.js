@@ -3,6 +3,7 @@ import { MessageType, STATS_PAGE_PATH } from '../shared/constants.js';
 import { formatDuration, toDateString } from '../shared/utils.js';
 
 async function init() {
+  document.getElementById('open-learning').addEventListener('click',()=>chrome.runtime.openOptionsPage());
   const prefs    = await settings.get();
   const today    = toDateString();
   const todaySessions = await sessions.getByDateRange(today, today);
@@ -24,7 +25,6 @@ async function init() {
       payload: { key: 'enabled', value: enabledToggle.checked },
     }).catch(() => {});
     // Fallback direct write if service worker is sleeping
-    chrome.storage.sync.set({ enabled: enabledToggle.checked });
     setStatus(enabledToggle.checked ? 'Blocking enabled' : 'Blocking disabled');
   });
 
@@ -53,7 +53,7 @@ function saveNotifSetting(prefs) {
     enabled:                 notifEnabled,
     globalDailyLimitMinutes: globalLimit,
   };
-  chrome.storage.sync.set({ notifications: updated });
+  chrome.runtime.sendMessage({type:MessageType.SET_SETTING,payload:{key:'notifications',value:updated}}).catch(()=>setStatus('Could not save settings'));
   prefs.notifications = updated;
   setStatus('Settings saved');
 }

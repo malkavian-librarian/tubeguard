@@ -118,6 +118,14 @@ export function scanDocument() {
   }
 
   maybeOverlayBlockedChannelPage();
+  const owner=document.querySelector(SELECTORS.WATCH_CHANNEL_LINK);
+  const id=owner?extractChannelId(owner):null;
+  const videoId=new URL(location.href).searchParams.get('v');
+  if((id&&blockedChannels.has(id))||(videoId&&blockedVideos.has(videoId))){
+    const player=document.querySelector(SELECTORS.WATCH_PLAYER),video=player?.querySelector(SELECTORS.WATCH_VIDEO);
+    if(video)video.pause();
+    if(player)hideElement(player);
+  }
 }
 
 // ── Channel-page overlay ──────────────────────────────────────────────────────

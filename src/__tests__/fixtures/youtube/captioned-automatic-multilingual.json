@@ -1,0 +1,30 @@
+{
+  "scenario": "captioned-automatic-multilingual",
+  "videoId": "Z9y8x7w6v5U",
+  "activeVideoId": "Z9y8x7w6v5U",
+  "owner": {
+    "channelId": "UCzyxwvutsrqponmlkjihgfe",
+    "handle": "@synthetic-languages",
+    "href": "/channel/UCzyxwvutsrqponmlkjihgfe"
+  },
+  "player": {
+    "videoId": "Z9y8x7w6v5U",
+    "durationSeconds": 1205,
+    "isLive": false,
+    "adPlaying": false,
+    "captions": [
+      {
+        "kind": "asr",
+        "language": "es",
+        "url": "https://www.youtube.com/api/timedtext?v=Z9y8x7w6v5U&lang=es&kind=asr&fmt=json3"
+      }
+    ]
+  },
+  "transcript": {
+    "format": "json3",
+    "segments": [
+      { "startMs": 0, "endMs": 2100, "text": "Lección sintética." },
+      { "startMs": 2100, "endMs": 4700, "text": "Prueba automática multilingüe." }
+    ]
+  }
+}

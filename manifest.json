@@ -1,43 +1,64 @@
 {
-  "manifest_version": 3,
-  "name": "TubeGuard",
-  "version": "0.1.0",
-  "description": "Block channels, track your watch time, and take back control of YouTube.",
-  "permissions": [
-    "storage",
-    "alarms",
-    "notifications",
-    "tabs"
-  ],
-  "host_permissions": [
-    "https://www.youtube.com/*"
-  ],
-  "background": {
-    "service_worker": "build/service-worker.js",
-    "type": "module"
-  },
-  "content_scripts": [
-    {
-      "matches": ["https://www.youtube.com/*"],
-      "js": ["build/content-main.js"],
-      "run_at": "document_start",
-      "all_frames": false
-    }
-  ],
-  "action": {
-    "default_popup": "src/popup/popup.html",
-    "default_icon": {
-      "16": "assets/icons/icon16.png",
-      "48": "assets/icons/icon48.png",
-      "128": "assets/icons/icon128.png"
-    }
-  },
-  "icons": {
-    "16": "assets/icons/icon16.png",
-    "48": "assets/icons/icon48.png",
-    "128": "assets/icons/icon128.png"
-  },
-  "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'none';"
-  }
+    "manifest_version":  3,
+    "name":  "TubeGuard",
+    "version":  "0.1.0",
+    "description":  "Block channels, track your watch time, and take back control of YouTube.",
+    "permissions":  [
+                        "storage",
+                        "alarms",
+                        "notifications",
+                        "tabs"
+                    ],
+    "host_permissions":  [
+                             "https://www.youtube.com/*",
+                             "https://openrouter.ai/*"
+                         ],
+    "background":  {
+                       "service_worker":  "build/service-worker.js",
+                       "type":  "module"
+                   },
+    "content_scripts":  [
+                            {
+                                "matches":  [
+                                                "https://www.youtube.com/*"
+                                            ],
+                                "js":  [
+                                           "build/content-main.js"
+                                       ],
+                                "run_at":  "document_start",
+                                "all_frames":  false
+                            },
+                            {
+                                "run_at":  "document_start",
+                                "world":  "MAIN",
+                                "all_frames":  false,
+                                "matches":  [
+                                                "https://www.youtube.com/*"
+                                            ],
+                                "js":  [
+                                           "build/youtube-bridge.js"
+                                       ]
+                            }
+                        ],
+    "action":  {
+                   "default_popup":  "src/popup/popup.html",
+                   "default_icon":  {
+                                        "16":  "assets/icons/icon16.png",
+                                        "48":  "assets/icons/icon48.png",
+                                        "128":  "assets/icons/icon128.png"
+                                    }
+               },
+    "icons":  {
+                  "16":  "assets/icons/icon16.png",
+                  "48":  "assets/icons/icon48.png",
+                  "128":  "assets/icons/icon128.png"
+              },
+    "content_security_policy":  {
+                                    "extension_pages":  "script-src \u0027self\u0027; object-src \u0027none\u0027;"
+                                },
+    "minimum_chrome_version":  "120",
+    "options_ui":  {
+                       "page":  "src/options/options.html",
+                       "open_in_tab":  true
+                   }
 }

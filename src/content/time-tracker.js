@@ -1,115 +1,80 @@
-import { MessageType } from '../shared/constants.js';
-import { toDateString } from '../shared/utils.js';
+﻿import { MessageType, SELECTORS } from '../shared/constants.js';
+import { extractEvidence } from './video-evidence.js';
 
-let session  = null;
-let videoEl  = null;
-let videoObs = null;
-
-// ── Public init ───────────────────────────────────────────────────────────────
-
-export function initTimeTracker() {
-  document.addEventListener('visibilitychange', onVisibility);
-  document.addEventListener('yt-navigate-finish', onNavigate);
-  findAndAttach();
+async function request(type,payload){
+  const response=await chrome.runtime.sendMessage({type,payload,requestId:crypto.randomUUID()});
+  if(response?.ok===false)throw Object.assign(new Error(response.error?.code),{code:response.error?.code});
+  return response;
+}
+export function createPlaybackTracker({now=Date.now,monotonicNow=()=>performance.now(),sendRequest=request}={}){
+  let info=null,capture=null,sequence=0,start=null,media=0,queue=[],sending=null,nav=0;
+  const flushQueue=()=>{
+    if(sending)return sending;
+    sending=(async()=>{while(queue.length){try{const item=queue[0],r=await sendRequest(item.type,item.payload);if(r?.ok===false)throw Object.assign(Error(),{code:r.error?.code});queue.shift();}catch(e){if(['STALE_GENERATION','AI_DISABLED','INVALID_CAPTURE'].includes(e.code))queue=[];break;}}})().finally(()=>{sending=null;});
+    return sending;
+  };
+  const play=position=>{media=position;if(!start)start={wall:now(),mono:monotonicNow(),media:position};};
+  const pause=async position=>{
+    media=position;
+    if(start&&info){
+      const end=Math.round(now()),elapsed=Math.round(monotonicNow()-start.mono),wall=end-Math.round(start.wall);
+      if(elapsed>0&&elapsed<=10000&&wall>0&&wall<=10000&&Math.abs(elapsed-wall)<500&&position>start.media){
+        if(queue.length<100){
+          if(capture){
+            const interval={wallStartMs:Math.round(start.wall),wallEndMs:end,mediaStartMs:Math.round(start.media*1000),mediaEndMs:Math.round(position*1000)};
+            queue.push({type:MessageType.RECORD_WATCH_CHECKPOINT,payload:{...capture,sequence:++sequence,videoId:info.videoId,navigationId:info.navigationId,startedAt:interval.wallStartMs,endedAt:end,activeMs:wall,activeIntervals:[interval],mediaIntervals:[{startMs:interval.mediaStartMs,endMs:interval.mediaEndMs}]}});
+          }else queue.push({type:MessageType.TRACK_SESSION,payload:{videoId:info.videoId,videoTitle:info.title||info.videoId,channelId:info.channelId,channelName:info.channelName,startTime:start.wall,duration:wall/1000}});
+        }
+      }
+    }
+    start=null;await flushQueue();
+  };
+  return {
+    async navigate(next){const token=++nav;await pause(media);info=next;capture=null;sequence=0;if(next.durationSeconds>300&&Number.isFinite(next.durationSeconds)){try{const r=await sendRequest(MessageType.BEGIN_CAPTURE,{videoId:next.videoId,navigationId:next.navigationId});if(token===nav&&r?.ok)capture=r.data;}catch{}}return capture;},
+    play,progress(delta){media+=delta;},
+    pause,waiting:pause,seeking:pause,hidden:pause,adStart:pause,
+    async rateChange(position){await pause(position);play(position);},
+    retryPending:flushQueue,
+    async checkpoint(position){await pause(position);play(position);},
+    get capture(){return capture;},
+  };
 }
 
-// ── Video element discovery ───────────────────────────────────────────────────
-
-function findAndAttach() {
-  const v = document.querySelector('video');
-  if (v) {
-    attachVideo(v);
-    return;
-  }
-  // Watch for video element to appear in a SPA that hasn't rendered yet
-  videoObs = new MutationObserver(() => {
-    const v2 = document.querySelector('video');
-    if (v2) { videoObs.disconnect(); videoObs = null; attachVideo(v2); }
-  });
-  videoObs.observe(document.body, { childList: true, subtree: true });
-}
-
-function attachVideo(v) {
-  if (videoEl === v) return;
-  detachVideo();
-  videoEl = v;
-  v.addEventListener('play',    onPlay);
-  v.addEventListener('pause',   onPause);
-  v.addEventListener('ended',   onEnded);
-  v.addEventListener('emptied', onEnded);
-  if (!v.paused && !document.hidden) beginSession();
-}
-
-function detachVideo() {
-  if (!videoEl) return;
-  videoEl.removeEventListener('play',    onPlay);
-  videoEl.removeEventListener('pause',   onPause);
-  videoEl.removeEventListener('ended',   onEnded);
-  videoEl.removeEventListener('emptied', onEnded);
-  videoEl = null;
-}
-
-// ── Event handlers ────────────────────────────────────────────────────────────
-
-function onPlay()       { if (!document.hidden) beginSession(); }
-function onPause()      { commitSession(); }
-function onEnded()      { commitSession(); detachVideo(); }
-function onVisibility() { document.hidden ? commitSession() : (videoEl && !videoEl.paused && beginSession()); }
-
-function onNavigate() {
-  commitSession();
-  detachVideo();
-  if (videoObs) { videoObs.disconnect(); videoObs = null; }
-  session = null;
-  setTimeout(findAndAttach, 500);
-}
-
-// ── Session management ────────────────────────────────────────────────────────
-
-function beginSession() {
-  if (session) return;
-  const info = currentVideoInfo();
-  if (!info) return;
-  session = { ...info, startTime: Date.now() };
-}
-
-function commitSession() {
-  if (!session) return;
-  const duration = (Date.now() - session.startTime) / 1000;
-  if (duration >= 2) {
-    chrome.runtime.sendMessage({
-      type:    MessageType.TRACK_SESSION,
-      payload: { ...session, duration },
-    }).catch(() => {});
-  }
-  session = null;
-}
-
-function currentVideoInfo() {
-  // Video ID from URL
-  const m = location.href.match(/watch\?v=([\w-]{11})/);
-  const videoId = m ? m[1] : null;
-  if (!videoId) return null;
-
-  // Video title
-  const titleEl = document.querySelector([
-    'h1.ytd-watch-metadata yt-formatted-string',
-    '#title h1 yt-formatted-string',
-    'h1.style-scope.ytd-watch-metadata',
-  ].join(', '));
-  const videoTitle = titleEl
-    ? titleEl.textContent.trim()
-    : document.title.replace(/ ?[-–|] YouTube$/, '').trim();
-
-  // Channel
-  const chanLink = document.querySelector(
-    '#owner #channel-name a, #upload-info #channel-name a, ytd-channel-name a'
-  );
-  const channelName = chanLink ? chanLink.textContent.trim() : 'Unknown';
-  const href        = chanLink?.href || '';
-  const cm1         = href.match(/\/channel\/(UC[\w-]{22})/);
-  const cm2         = href.match(/\/@([\w.-]+)/);
-  const channelId   = cm1 ? cm1[1] : (cm2 ? `@${cm2[1]}` : channelName);
-
-  return { videoId, videoTitle, channelId, channelName };
+export function initTimeTracker(){
+  const tracker=createPlaybackTracker();let video=null,controller=null,dispose=[],navigation=0,ready=false,lastPosition=0,lastCheckpoint=0,blocked=false;
+  const active=()=>video&&!video.paused&&!video.ended&&!video.seeking&&!document.hidden&&!blocked&&!document.querySelector(SELECTORS.WATCH_AD);
+  const stop=()=>{if(video)void tracker.pause(lastPosition);};
+  const attach=async()=>{
+    const v=document.querySelector(SELECTORS.WATCH_VIDEO),videoId=new URL(location.href).searchParams.get('v');
+    if(!v||!/^[\w-]{11}$/.test(videoId??''))return;
+    if(video===v&&ready)return;
+    const token=++navigation;controller?.abort();controller=new AbortController();for(const off of dispose)off();dispose=[];stop();video=v;ready=true;
+    const navigationId=crypto.randomUUID();lastPosition=v.currentTime;
+    const listen=(name,fn)=>{v.addEventListener(name,fn);dispose.push(()=>v.removeEventListener(name,fn));};
+    listen('playing',()=>{blocked=false;if(active())tracker.play(v.currentTime);});
+    for(const event of ['pause','ended','waiting','seeking','emptied'])listen(event,()=>{stop();blocked=event==='waiting'||event==='seeking';if(event==='emptied'){ready=false;void attach();}});
+    listen('seeked',()=>{blocked=false;lastPosition=v.currentTime;if(active())tracker.play(v.currentTime);});
+    listen('ratechange',()=>{void tracker.rateChange(v.currentTime);});
+    listen('timeupdate',()=>{const pos=v.currentTime;if(active()){tracker.progress(Math.max(0,pos-lastPosition));if(performance.now()-lastCheckpoint>=5000){lastCheckpoint=performance.now();void tracker.checkpoint(pos);}}else stop();lastPosition=pos;});
+    const basic={videoId,navigationId,durationSeconds:Number.isFinite(v.duration)&&v.duration>0?v.duration:null,title:document.title};
+    let capture=await tracker.navigate(basic);
+    if(token!==navigation)return;
+    if(active())tracker.play(v.currentTime);
+    listen('loadedmetadata',()=>{if(!basic.durationSeconds){ready=false;void attach();}});
+    const evidence=await extractEvidence({videoId,navigationId,signal:controller.signal}).catch(()=>null);
+    if(token!==navigation||!evidence)return;
+    evidence.durationSeconds??=Number.isFinite(v.duration)&&v.duration>0?v.duration:null;
+    if(!capture&&evidence.durationSeconds>300)capture=await tracker.navigate(evidence);
+    if(token!==navigation)return;
+    if(capture)await request(MessageType.UPSERT_VIDEO_EVIDENCE,{...evidence,...capture}).catch(()=>{});
+    if(active())tracker.play(v.currentTime);
+  };
+  document.addEventListener('yt-navigate-start',()=>{stop();ready=false;controller?.abort();navigation++;});
+  document.addEventListener('yt-navigate-finish',()=>{ready=false;void attach();});
+  document.addEventListener('visibilitychange',()=>{if(document.hidden)stop();else if(active())tracker.play(video.currentTime);});
+  window.addEventListener('pagehide',stop);
+  chrome.runtime.onMessage.addListener(msg=>{if(msg?.type===MessageType.CAPTURE_POLICY_CHANGED){stop();ready=false;void attach();}});
+  const observer=new MutationObserver(()=>{if(document.querySelector(SELECTORS.WATCH_AD))stop();if(document.querySelector(SELECTORS.WATCH_VIDEO)!==video||!ready)void attach();});
+  observer.observe(document.documentElement,{childList:true,subtree:true,attributes:true,attributeFilter:['class']});
+  void attach();
 }
