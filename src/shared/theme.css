@@ -1,0 +1,84 @@
+/*
+ * TubeGuard design tokens — single source of truth.
+ * Night-mode only: no light-mode branch, no `prefers-color-scheme` fallback.
+ * Every color/spacing/radius/typography value used anywhere in the extension
+ * (popup, stats, options, and injected YouTube UI) must come from these
+ * custom properties. See docs/BRANDBOOK.md for the full palette reference
+ * and contrast table.
+ */
+
+:root {
+  color-scheme: dark;
+
+  /* ── Surfaces ─────────────────────────────────────────────────────────── */
+  --tg-bg:            #0d0a14;
+  --tg-bg-elevated:   #150f22;
+  --tg-surface:       #1b1428;
+  --tg-surface-2:     #241a35;
+  --tg-border:        #34264d;
+  --tg-border-strong: #4a3570;
+
+  /* ── Text ─────────────────────────────────────────────────────────────── */
+  --tg-text:           #f3eefc;
+  --tg-text-secondary: #b6a8d1;
+  --tg-text-muted:     #8577a3;
+  --tg-text-on-accent: #ffffff;
+
+  /*
+   * ── Neon-purple accent system ───────────────────────────────────────────
+   * --tg-accent is the brand hue (#7c3aed). Contrast against --tg-bg is
+   * 3.44:1 — enough for large text / UI components but NOT normal body
+   * text. Use --tg-accent-strong (4.70:1) when the accent is the
+   * foreground color of normal-size text on --tg-bg.
+   */
+  --tg-accent:          #7c3aed;
+  --tg-accent-strong:   #9257ff;
+  --tg-accent-soft:     #c9b8ff;
+  --tg-accent-rgb:      124, 58, 237;
+
+  --tg-accent-bg:       rgba(124, 58, 237, 0.16);
+
+  --tg-accent-glow-sm: 0 0 6px rgba(124, 58, 237, 0.55);
+  --tg-accent-glow-md: 0 0 16px rgba(124, 58, 237, 0.55), 0 0 4px rgba(124, 58, 237, 0.85);
+  --tg-accent-glow-lg: 0 0 32px rgba(124, 58, 237, 0.45), 0 0 8px rgba(124, 58, 237, 0.75);
+  --tg-accent-text-glow: 0 0 8px rgba(124, 58, 237, 0.9);
+
+  /*
+   * ── Semantic colors ──────────────────────────────────────────────────────
+   * Shifted out of generic red/green/amber into hues that sit next to the
+   * purple accent on the wheel (magenta danger, teal success, cyan info)
+   * while keeping each one unambiguous and >=4.5:1 against --tg-bg for
+   * normal text, and >=4.5:1 for dark text placed on the solid swatch.
+   */
+  --tg-danger:     #ff4d6d;
+  --tg-danger-bg:  rgba(255, 77, 109, 0.16);
+  --tg-warning:    #ffa94d;
+  --tg-warning-bg: rgba(255, 169, 77, 0.16);
+  --tg-success:    #3ddc97;
+  --tg-success-bg: rgba(61, 220, 151, 0.16);
+  --tg-info:       #22d3ee;
+  --tg-info-bg:    rgba(34, 211, 238, 0.16);
+
+  /* ── Typography ───────────────────────────────────────────────────────── */
+  --tg-font: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  --tg-font-mono: ui-monospace, "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+
+  /* ── Spacing scale (6 steps) ──────────────────────────────────────────── */
+  --tg-space-1: 4px;
+  --tg-space-2: 8px;
+  --tg-space-3: 12px;
+  --tg-space-4: 16px;
+  --tg-space-5: 24px;
+  --tg-space-6: 32px;
+
+  /* ── Radius scale (4 steps) ───────────────────────────────────────────── */
+  --tg-radius-sm:   4px;
+  --tg-radius-md:   8px;
+  --tg-radius-lg:   12px;
+  --tg-radius-full: 999px;
+
+  /* ── Elevation ────────────────────────────────────────────────────────── */
+  --tg-shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.45);
+  --tg-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.5);
+  --tg-shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.6);
+}

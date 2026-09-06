@@ -1,0 +1,175 @@
+/*
+ * TubeGuard injected YouTube UI — shared component classes.
+ * Consumed by ui-injector.js and blocker.js. Colors/spacing/radius come
+ * only from src/shared/theme.css custom properties (injected alongside
+ * this file by theme-inject.js) — never hardcode a value here.
+ */
+
+.tg-anchor-wrapper {
+  position: relative;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+}
+
+.tg-anchor-text {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tg-btn-wrapper {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  margin-left: var(--tg-space-2);
+}
+
+/* ── Button ───────────────────────────────────────────────────────────────── */
+.tg-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 8px;
+  background: var(--tg-accent);
+  border: none;
+  border-radius: var(--tg-radius-sm);
+  cursor: pointer;
+  color: var(--tg-text-on-accent);
+  font-family: var(--tg-font);
+  font-weight: bold;
+  font-size: 12px;
+  line-height: 1;
+  vertical-align: middle;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 10;
+  transition: box-shadow .15s;
+}
+
+.tg-btn:hover { box-shadow: var(--tg-accent-glow-md); }
+
+.tg-btn--danger { background: var(--tg-danger); }
+.tg-btn--ghost   { background: var(--tg-surface-2); color: var(--tg-text); border: 1px solid var(--tg-border); }
+
+/* ── Stats chip ───────────────────────────────────────────────────────────── */
+.tg-chip {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 8px;
+  margin-left: var(--tg-space-2);
+  background: var(--tg-accent-bg);
+  border: 1px solid var(--tg-border-strong);
+  border-radius: var(--tg-radius-sm);
+  color: var(--tg-accent-soft);
+  font-family: var(--tg-font);
+  font-weight: bold;
+  font-size: 12px;
+  line-height: 1;
+  vertical-align: middle;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 10;
+}
+
+.tg-chip--visible { display: inline-flex; }
+
+/* ── Popover ──────────────────────────────────────────────────────────────── */
+.tg-popover {
+  position: fixed;
+  z-index: 99999;
+  border-radius: var(--tg-radius-md);
+  padding: var(--tg-space-3) var(--tg-space-4);
+  background: var(--tg-surface);
+  color: var(--tg-text);
+  border: 1px solid var(--tg-border-strong);
+  box-shadow: var(--tg-shadow-lg), var(--tg-accent-glow-sm);
+  font-family: var(--tg-font);
+  font-size: 13px;
+  min-width: 210px;
+}
+
+.tg-popover__title {
+  margin: 0 0 10px;
+  font-weight: 500;
+  word-break: break-word;
+  color: var(--tg-text);
+}
+
+.tg-popover__actions { display: flex; gap: var(--tg-space-2); }
+
+.tg-popover__btn {
+  flex: 1;
+  padding: 6px 10px;
+  border: none;
+  border-radius: var(--tg-radius-sm);
+  cursor: pointer;
+  font-size: 13px;
+  font-family: var(--tg-font);
+}
+
+.tg-popover__btn--confirm { background: var(--tg-danger); color: var(--tg-text-on-accent); }
+.tg-popover__btn--cancel  { background: var(--tg-surface-2); color: var(--tg-text); }
+
+/* ── Toast ────────────────────────────────────────────────────────────────── */
+.tg-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--tg-surface);
+  color: var(--tg-text);
+  padding: 10px 18px;
+  border-radius: var(--tg-radius-md);
+  font-family: var(--tg-font);
+  font-size: 13px;
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  gap: var(--tg-space-4);
+  box-shadow: var(--tg-shadow-lg), var(--tg-accent-glow-sm);
+  border: 1px solid var(--tg-border-strong);
+}
+
+.tg-toast__undo {
+  background: transparent;
+  border: none;
+  color: var(--tg-accent-soft);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 0;
+  font-family: var(--tg-font);
+}
+
+.tg-toast__undo:hover { color: var(--tg-accent-strong); }
+
+/* ── Channel-blocked overlay ──────────────────────────────────────────────── */
+.tg-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(13, 10, 20, .92);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--tg-space-4);
+  color: var(--tg-text);
+  font-family: var(--tg-font);
+}
+
+.tg-overlay__message {
+  font-size: 20px;
+  font-weight: 500;
+  margin: 0;
+  text-shadow: var(--tg-accent-text-glow);
+}
+
+.tg-overlay__btn {
+  padding: 8px 20px;
+  font-size: 15px;
+}

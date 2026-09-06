@@ -1,6 +1,24 @@
 // Lightweight Canvas 2D charts — no external dependencies
+// Canvas has no var() support, so palette/text/track colors are read from
+// theme.css custom properties at render time instead of being hardcoded here.
 
-const COLORS = ['#ff4444', '#ff7700', '#ffaa00', '#44bb44', '#4488ff', '#aa44ff', '#ff44aa', '#44dddd'];
+function token(name, fallback) {
+  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return v || fallback;
+}
+
+function chartPalette() {
+  return [
+    token('--tg-accent', '#7c3aed'),
+    token('--tg-info', '#22d3ee'),
+    token('--tg-danger', '#ff4d6d'),
+    token('--tg-success', '#3ddc97'),
+    token('--tg-warning', '#ffa94d'),
+    token('--tg-accent-strong', '#9257ff'),
+    token('--tg-accent-soft', '#c9b8ff'),
+    token('--tg-text-secondary', '#b6a8d1'),
+  ];
+}
 
 /**
  * Render a horizontal bar chart.
@@ -21,9 +39,11 @@ export function renderBarChart(canvas, data, opts = {}) {
 
   ctx.clearRect(0, 0, W, H);
 
+  const textColor  = token('--tg-text', '#f3eefc');
+
   if (!data.length) {
-    ctx.fillStyle = '#888';
-    ctx.font = '13px Roboto, Arial, sans-serif';
+    ctx.fillStyle = token('--tg-text-muted', '#8577a3');
+    ctx.font = '13px system-ui, sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText('No data for this period.', W / 2, H / 2);
     return;
@@ -35,16 +55,15 @@ export function renderBarChart(canvas, data, opts = {}) {
   const rowH       = 28;
   const barH       = 16;
   const startY     = 16;
-  const dark       = document.documentElement.hasAttribute('dark');
-  const textColor  = dark ? '#e8e8e8' : '#0f0f0f';
-  const trackColor = dark ? '#333'    : '#e8e8e8';
+  const trackColor = token('--tg-surface-2', '#241a35');
+  const colors     = chartPalette();
 
-  ctx.font = '12px Roboto, Arial, sans-serif';
+  ctx.font = '12px system-ui, sans-serif';
 
   data.forEach(({ label, value }, i) => {
     const y      = startY + i * rowH;
     const barW   = Math.max((value / maxVal) * barAreaW, value > 0 ? 2 : 0);
-    const color  = COLORS[i % COLORS.length];
+    const color  = colors[i % colors.length];
     const valStr = opts.unit ? `${opts.unit}${value}` : String(value);
 
     // Track
