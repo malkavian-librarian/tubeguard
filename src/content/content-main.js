@@ -2,9 +2,12 @@ import { init, scanDocument, addBlockedChannel, removeBlockedChannel, addBlocked
 import { startObserver, stopObserver } from './observer.js';
 import { injectBlockButtons } from './ui-injector.js';
 import { initTimeTracker } from './time-tracker.js';
+import { injectTheme } from './theme-inject.js';
 import { MessageType } from '../shared/constants.js';
 
 async function bootstrap() {
+  injectTheme();
+
   // Load block list synchronously from sync storage — fastest possible path
   const prefs = await new Promise(resolve =>
     chrome.storage.sync.get({

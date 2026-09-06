@@ -117,6 +117,23 @@ manifest.json
 - Show at most one notification per channel per calendar day.
 - Always provide an action button ("View Stats") that opens `stats.html`.
 
+### Design system
+- All colors/spacing/radius/typography must come from `src/shared/theme.css`
+  custom properties. Never hardcode a hex/px value in a `.css` file or inline
+  `element.style` for cosmetic properties (color, background, font, border-radius,
+  box-shadow, spacing). Inline styles are only for computed layout values that
+  must be set at runtime from live geometry (e.g. a popover's `top`/`left`
+  computed from `getBoundingClientRect()`). See `docs/BRANDBOOK.md` for the full
+  palette, typography, spacing/radius, component, and accessibility-contrast
+  reference. Night-mode only — no light-mode branch, no `prefers-color-scheme`
+  fallback anywhere in the codebase.
+- The injected YouTube UI (block button, stats chip, confirm popover, undo toast)
+  is themed by `src/content/theme-inject.js`, which fetches and injects
+  `src/shared/theme.css` and `src/content/injected-ui.css` as `<style>` tags once
+  per page load. Both files must stay listed in `manifest.json`'s
+  `web_accessible_resources` (scoped to `youtube.com`) so the content-script
+  fetch can read them.
+
 ---
 
 ## YouTube DOM Selector Strategy

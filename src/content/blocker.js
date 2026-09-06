@@ -141,18 +141,14 @@ function maybeOverlayBlockedChannelPage() {
 
   const overlay = document.createElement('div');
   overlay.id = 'tubeguard-channel-overlay';
-  overlay.style.cssText = [
-    'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;',
-    'display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;',
-    'color:#fff;font-family:Roboto,Arial,sans-serif;',
-  ].join('');
+  overlay.className = 'tg-overlay';
 
   const msg = document.createElement('p');
-  msg.style.cssText = 'font-size:20px;font-weight:500;margin:0;';
+  msg.className = 'tg-overlay__message';
   msg.textContent = 'This channel is blocked by TubeGuard.';
 
   const btn = document.createElement('button');
-  btn.style.cssText = 'padding:8px 20px;background:#c00;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:15px;';
+  btn.className = 'tg-btn tg-btn--danger tg-overlay__btn';
   btn.textContent = 'Unblock Channel';
   btn.addEventListener('click', () => {
     chrome.runtime.sendMessage({ type: MessageType.UNBLOCK_CHANNEL, payload: { channelId: id } });

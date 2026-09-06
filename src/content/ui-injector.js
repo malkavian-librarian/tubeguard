@@ -31,18 +31,11 @@ export function injectBlockButtons() {
     // Anchor parent needs flex layout to keep button visible on same line
     const wrapper = anchor.closest('div') || anchor.parentElement;
     if (!wrapper) continue;
-    wrapper.style.position = 'relative';
-    wrapper.style.display = 'flex';
-    wrapper.style.flexWrap = 'nowrap';
-    wrapper.style.alignItems = 'center';
+    wrapper.classList.add('tg-anchor-wrapper');
 
     const textSpan = wrapper.firstElementChild;
-    if (textSpan && !textSpan.classList.contains('tubeguard-block-wrapper')) {
-      textSpan.style.flex = '0 1 auto';
-      textSpan.style.minWidth = '0';
-      textSpan.style.overflow = 'hidden';
-      textSpan.style.textOverflow = 'ellipsis';
-      textSpan.style.whiteSpace = 'nowrap';
+    if (textSpan && !textSpan.classList.contains('tg-btn-wrapper')) {
+      textSpan.classList.add('tg-anchor-text');
     }
 
     wrapper.appendChild(btn);
@@ -71,28 +64,14 @@ function injectOnWatchPage() {
 
 // ── Button factory ────────────────────────────────────────────────────────────
 
-function isDark() {
-  return document.documentElement.hasAttribute('dark');
-}
-
 function makeBlockButton(channelId, channelName, container) {
   const wrapper = document.createElement('span');
-  wrapper.className = 'tubeguard-block-wrapper';
-  wrapper.style.cssText = 'display:inline-flex;align-items:center;vertical-align:middle;margin-left:8px;';
+  wrapper.className = 'tubeguard-block-wrapper tg-btn-wrapper';
 
   const btn = document.createElement('button');
-  btn.className  = 'tubeguard-block-btn';
+  btn.className = 'tubeguard-block-btn tg-btn tg-btn--danger';
   btn.setAttribute('aria-label', `Block channel: ${channelName}`);
   btn.setAttribute('title', 'Block this channel');
-  btn.style.cssText = [
-    'display:inline-flex;align-items:center;justify-content:center;',
-    'padding:4px 8px;',
-    'background:#cc0000;',
-    'border:none;border-radius:4px;cursor:pointer;',
-    'color:#fff;font-weight:bold;',
-    'font-size:12px;line-height:1;vertical-align:middle;flex-shrink:0;',
-    'position:relative;z-index:10;',
-  ].join('');
   btn.textContent = 'BLOCK';
 
   btn.addEventListener('click', (e) => {
@@ -104,21 +83,12 @@ function makeBlockButton(channelId, channelName, container) {
   wrapper.appendChild(btn);
 
   const statsChip = document.createElement('span');
-  statsChip.className = 'tubeguard-stats-chip';
-  statsChip.style.cssText = [
-    'display:none;align-items:center;justify-content:center;',
-    'padding:4px 8px;margin-left:6px;',
-    'background:#ff9800;',
-    'border:none;border-radius:4px;',
-    'color:#fff;font-weight:bold;',
-    'font-size:12px;line-height:1;vertical-align:middle;flex-shrink:0;',
-    'position:relative;z-index:10;'
-  ].join('');
+  statsChip.className = 'tubeguard-stats-chip tg-chip';
 
   sendRequest(MessageType.GET_STATS, { channelId }).then(res => {
     if (res && res.hours !== undefined && res.hours > 0) {
       statsChip.textContent = `${res.hours.toFixed(1)}h`;
-      statsChip.style.display = 'inline-flex';
+      statsChip.classList.add('tg-chip--visible');
     }
   }).catch(() => {});
 
@@ -132,31 +102,23 @@ function makeBlockButton(channelId, channelName, container) {
 function showConfirmPopover(anchor, channelId, channelName, container) {
   document.querySelector('.tubeguard-popover')?.remove();
 
-  const dark    = isDark();
   const popover = document.createElement('div');
-  popover.className = 'tubeguard-popover';
-  popover.style.cssText = [
-    'position:fixed;z-index:99999;border-radius:8px;padding:12px 16px;',
-    `background:${dark ? '#212121' : '#fff'};`,
-    `color:${dark ? '#fff' : '#0f0f0f'};`,
-    `border:1px solid ${dark ? '#444' : '#dadada'};`,
-    'box-shadow:0 4px 16px rgba(0,0,0,.28);',
-    'font-family:Roboto,Arial,sans-serif;font-size:13px;min-width:210px;',
-  ].join('');
+  popover.className = 'tubeguard-popover tg-popover';
 
+  // Position is computed from the anchor's live layout — must stay inline.
   const rect  = anchor.getBoundingClientRect();
   popover.style.top  = `${rect.bottom + 6}px`;
   popover.style.left = `${Math.min(rect.left, window.innerWidth - 230)}px`;
 
   const title = document.createElement('p');
-  title.style.cssText = 'margin:0 0 10px;font-weight:500;word-break:break-word;';
-  title.textContent   = `Block "${channelName.slice(0, 50)}"?`;
+  title.className   = 'tg-popover__title';
+  title.textContent = `Block "${channelName.slice(0, 50)}"?`;
 
   const row = document.createElement('div');
-  row.style.cssText = 'display:flex;gap:8px;';
+  row.className = 'tg-popover__actions';
 
-  const confirmBtn = styleBtn('Block', '#c00', '#fff', dark);
-  const cancelBtn  = styleBtn('Cancel', dark ? '#3f3f3f' : '#f2f2f2', dark ? '#fff' : '#0f0f0f', dark);
+  const confirmBtn = styleBtn('Block', 'confirm');
+  const cancelBtn  = styleBtn('Cancel', 'cancel');
 
   confirmBtn.addEventListener('click', () => {
     popover.remove();
@@ -175,10 +137,10 @@ function showConfirmPopover(anchor, channelId, channelName, container) {
     document.addEventListener('click', () => popover.remove(), { once: true }), 0);
 }
 
-function styleBtn(text, bg, color, _dark) {
+function styleBtn(text, variant) {
   const b = document.createElement('button');
-  b.textContent     = text;
-  b.style.cssText   = `flex:1;padding:6px 10px;background:${bg};color:${color};border:none;border-radius:4px;cursor:pointer;font-size:13px;`;
+  b.textContent = text;
+  b.className   = `tg-popover__btn tg-popover__btn--${variant}`;
   return b;
 }
 
@@ -254,17 +216,8 @@ function watchForUnsubscribeConfirm() {
 function showToast(message, undoFn) {
   document.querySelector('.tubeguard-toast')?.remove();
 
-  const dark  = isDark();
   const toast = document.createElement('div');
-  toast.className   = 'tubeguard-toast';
-  toast.style.cssText = [
-    'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);',
-    'background:#212121;color:#fff;',
-    'padding:10px 18px;border-radius:6px;',
-    'font-family:Roboto,Arial,sans-serif;font-size:13px;',
-    'z-index:99999;display:flex;align-items:center;gap:14px;',
-    'box-shadow:0 4px 14px rgba(0,0,0,.45);',
-  ].join('');
+  toast.className = 'tubeguard-toast tg-toast';
 
   const span = document.createElement('span');
   span.textContent = message;
@@ -272,8 +225,8 @@ function showToast(message, undoFn) {
 
   let undone = false;
   const undo = document.createElement('button');
-  undo.textContent  = 'Undo';
-  undo.style.cssText = 'background:transparent;border:none;color:#aaa;cursor:pointer;font-size:13px;font-weight:600;padding:0;';
+  undo.textContent = 'Undo';
+  undo.className   = 'tg-toast__undo';
   undo.addEventListener('click', () => {
     if (!undone) { undone = true; undoFn(); }
     toast.remove();
