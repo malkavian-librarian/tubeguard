@@ -33,6 +33,19 @@ export function openDB() {
       for(const [name,index,key] of [[STORE.CHUNKS,'endedAt','endedAt'],[STORE.CHUNKS,'videoId','videoId'],[STORE.CHUNKS,'policyRevision','policyRevision'],[STORE.RUNS,'status','status'],[STORE.CLASSIFICATIONS,'createdAt','createdAt'],[STORE.COVERAGE,'channelId','channelId']]){
         const store=e.target.transaction.objectStore(name);if(!store.indexNames.contains(index))store.createIndex(index,key);
       }
+      // v3: compound/range indexes for hot-path accounting queries (getChannelAccounting,
+      // planBlock, selectRunBatch, claimRun) and for periodic pruning — avoids full-table
+      // getAll()+JS-filter scans that grow linearly with lifetime IndexedDB size.
+      for(const [name,index,key,opts] of [
+        [STORE.COVERAGE,'policyRevision','policyRevision'],
+        [STORE.COVERAGE,'policyRevision_channelId',['policyRevision','channelId']],
+        [STORE.CLASSIFICATIONS,'policyRevision','policyRevision'],
+        [STORE.CLASSIFICATIONS,'videoId_evidenceVersion',['videoId','evidenceVersion']],
+        [STORE.RUNS,'configGeneration','configGeneration'],
+        [STORE.OWNERSHIP,'aliases','aliases',{multiEntry:true}],
+      ]){
+        const store=e.target.transaction.objectStore(name);if(!store.indexNames.contains(index))store.createIndex(index,key,opts);
+      }
     };
 
     req.onsuccess = (e) => { _db = e.target.result; _db.onversionchange = () => { _db.close(); _db = null; }; resolve(_db); };

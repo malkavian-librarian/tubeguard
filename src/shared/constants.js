@@ -28,7 +28,7 @@ export const BlockType = {
 };
 
 export const DB_NAME    = 'tubeguard-db';
-export const DB_VERSION = 2;
+export const DB_VERSION = 3;
 
 export const STORE = {
   VIDEOS: 'videos', EVIDENCE: 'video-evidence', CHUNKS: 'watch-chunks', CAPTURES: 'capture-sessions',

@@ -1,7 +1,9 @@
 import { ALARM_NAME } from '../shared/constants.js';
-import { sessions, settings } from '../shared/storage.js';
+import { sessions, settings, analysisStore } from '../shared/storage.js';
 import { showLimitNotification } from './notification.js';
 import { toDateString } from '../shared/utils.js';
+
+export const PRUNE_ALARM_NAME = 'analysis-data-prune';
 
 export function registerAlarms() {
   chrome.alarms.get(ALARM_NAME, (alarm) => {
@@ -9,9 +11,18 @@ export function registerAlarms() {
       chrome.alarms.create(ALARM_NAME, { periodInMinutes: 15 });
     }
   });
+  chrome.alarms.get(PRUNE_ALARM_NAME, (alarm) => {
+    if (!alarm) {
+      chrome.alarms.create(PRUNE_ALARM_NAME, { periodInMinutes: 1440 });
+    }
+  });
 }
 
 export async function handleAlarm(alarm) {
+  if (alarm.name === PRUNE_ALARM_NAME) {
+    await analysisStore.pruneAging();
+    return;
+  }
   if (alarm.name !== ALARM_NAME) return;
 
   const prefs = await settings.get();
