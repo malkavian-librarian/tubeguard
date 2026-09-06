@@ -42,9 +42,9 @@ npm run build:watch
 npm run zip
 ```
 
-**Bundler:** esbuild. Only `service-worker.js` and `content-main.js` are bundled into `build/` (flat — manifest expects `build/service-worker.js` and `build/content-main.js`). Stats and popup pages load ES modules directly as `type="module"`.
+**Bundler:** esbuild. `service-worker.js`, `content-main.js`, and `youtube-bridge.js` are bundled into `build/` (flat — manifest expects `build/service-worker.js`, `build/content-main.js`, `build/youtube-bridge.js`). Stats, popup, and options pages load ES modules directly as `type="module"`.
 
-**Not yet configured (v1):** `npm run lint` and `npm test` are not wired up — eslint and vitest are not installed.
+**Testing:** Vitest (unit) and Playwright (e2e, against the packaged extension) are fully configured and passing — see the Testing section below. `npm run lint` is not wired up — eslint is not installed.
 
 **Load unpacked in Chrome:**
 1. Go to `chrome://extensions`
@@ -58,29 +58,47 @@ npm run zip
 ```
 src/
   background/
-    service-worker.js     # MV3 service worker entry point
-    alarm-manager.js      # chrome.alarms for notification checks
-    notification.js       # Chrome notification builder
+    service-worker.js       # MV3 service worker entry point / message router
+    alarm-manager.js        # chrome.alarms for notification checks + analysis pruning
+    notification.js         # Chrome notification builder (channel limits, suspended analysis runs)
+    message-authorization.js # Per-message-type auth/validation before routing
+    mutation-queue.js       # Serializes concurrent storage mutations
+    block-service.js        # BLOCK_CHANNEL/BLOCK_VIDEO handlers, outbox drain
+    session-service.js      # TRACK_SESSION handler
+    openrouter-client.js    # OpenRouter API client for daily learning analysis
+    analysis-runner.js      # Claims/runs/finishes analysis runs (lease, generation fencing)
+    analysis-scheduler.js   # Analysis alarm scheduling (daily due-check)
+    analysis-policy.js      # Priorities/policy revision logic
+    analysis-input.js       # Builds model input from evidence + policy
   content/
-    content-main.js       # Content script entry, bootstraps modules
-    blocker.js            # Hides/removes blocked elements
-    observer.js           # MutationObserver + SPA navigation
-    ui-injector.js        # Injects Block buttons into YouTube UI
-    time-tracker.js       # Tracks active watch time
+    content-main.js         # Content script entry, bootstraps modules
+    blocker.js               # Hides/removes blocked elements
+    observer.js               # MutationObserver + SPA navigation
+    ui-injector.js            # Injects Block buttons into YouTube UI
+    time-tracker.js           # Tracks active watch time, drives capture checkpoints
+    video-evidence.js         # Extracts title/description/transcript evidence for analysis
+    transcript-adapter.js     # Normalizes YouTube transcript panel data
+    youtube-bridge.js         # Isolated-world <-> page-world bridge for evidence extraction
+    theme-inject.js           # Injects theme.css + injected-ui.css into the YouTube page
   stats/
     stats.html / stats.js / stats.css / charts.js
   popup/
     popup.html / popup.js / popup.css
+  options/
+    options.html / options.js / options.css   # Daily learning analysis settings (OpenRouter key, priorities)
   shared/
-    storage.js            # Thin barrel re-exporting storage/*.js
+    storage.js              # Thin barrel re-exporting storage/*.js
     storage/
-      schema.js           # IndexedDB open/upgrade + low-level request helper
-      transaction.js      # Multi-store transaction/mutation helpers (mutate, charge, checkRun, pageStore, ...)
-      legacy-stores.js     # sessions, blocklistMeta, statsCache, settings
-      analysis-store.js    # analysisStore — daily learning analysis IndexedDB API
-    constants.js          # All enums, message types, selector registry
-    message-bus.js        # Typed inter-context messaging (send, sendRequest, sendToTab, onMessage)
-    utils.js              # Date math, CSV, telemetry stub
+      schema.js             # IndexedDB open/upgrade + low-level request helper
+      transaction.js        # Multi-store transaction/mutation helpers (mutate, charge, checkRun, pageStore, ...)
+      legacy-stores.js      # sessions, blocklistMeta, statsCache, settings
+      analysis-store.js     # analysisStore — daily learning analysis IndexedDB API
+    constants.js             # All enums, message types, selector registry
+    message-bus.js           # Typed inter-context messaging (send, sendRequest, sendToTab, onMessage)
+    analysis-contracts.js    # Centralized analysis constants (limits, durations, backoff, lease)
+    analysis-validation.js   # Shared assert()/pattern helpers for message payload validation
+    theme.css                # Design-token source of truth (see Design system below)
+    utils.js                 # Date math, CSV, telemetry stub
 assets/icons/
 manifest.json
 ```
@@ -163,27 +181,30 @@ The architecture supports extension without modifying core modules:
 
 1. **New blocked content type** (e.g., Shorts): add to `BlockType` enum in `constants.js`, add a selector to `SELECTORS`, and implement a handler in `blocker.js`.
 2. **New stats widget**: implement a `renderPlugin(container, data)` function and register it via `statsPage.registerPlugin(name, fn)` in `stats.js`.
-3. **AI Summary (v2)**: implement as a stats plugin. API key stored in `chrome.storage.sync.aiApiKey`. No changes to core blocking or storage modules.
+3. **Daily learning analysis** (shipped, not a v2 plan): already implemented — see the "Daily learning analysis" section below for its invariants. Extend it via `analysis-policy.js`/`analysis-input.js`, not by adding a second AI pathway.
 4. **Telemetry (v2)**: implement the `trackEvent` function in `utils.js`. The stub is already in place — it receives calls throughout the codebase but currently no-ops.
 
 ---
 
 ## Testing
 
-Unit test infrastructure is not yet set up (v1). Planned framework: Vitest. Tests will live in `src/__tests__/`.
+Vitest (unit) and Playwright (e2e) are fully configured and passing — tests live in `src/__tests__/` (Playwright specs under `src/__tests__/e2e/`).
 
-**Before every release**, run the manual QA checklist in `SPEC.md` section 13.
+```powershell
+npm.cmd test        # vitest, ~17 files
+npm.cmd run build   # esbuild bundle (required before test:e2e)
+npm.cmd run test:e2e  # Playwright against the packaged extension
+```
+
+Run all three before completing any change to the daily-learning-analysis feature (see below).
+
+**Before every release**, also run the manual QA checklist in `SPEC.md` section 13.
 
 ---
 
 ## .gitignore
 
-Add to `.gitignore` before first commit:
-```
-build/
-node_modules/
-*.zip
-```
+Current `.gitignore` covers `build/`, `node_modules/`, `*.zip`, Playwright artifacts (`.test-profiles/`, `test-results/`, `playwright-report/`), agent worktrees (`.claude/worktrees/`), and common OS/editor cruft (`.DS_Store`, `Thumbs.db`, `.vscode/`, `*.log`).
 
 ---
 
