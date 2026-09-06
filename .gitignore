@@ -4,3 +4,8 @@ node_modules/
 .test-profiles/
 test-results/
 playwright-report/
+.claude/worktrees/
+.DS_Store
+Thumbs.db
+.vscode/
+*.log
