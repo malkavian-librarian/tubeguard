@@ -45,10 +45,15 @@ Open **Learning priorities** from the popup to enable analysis, enter an OpenRou
 
 The API key is stored in trusted local extension storage and is excluded from history, logs, and exports. Titles, descriptions, transcript excerpts, runs, and decisions remain in the local Chrome profile. Transcript capture is best effort because YouTube may withhold caption data; the history records an explicit unavailable or partial status when that happens.
 
+## Design
+The popup, stats, options pages, and every button/chip/popover injected into YouTube share one
+night-mode purple-neon design system driven by CSS custom properties in `src/shared/theme.css`.
+See `docs/BRANDBOOK.md` for the full palette, typography, spacing, and component reference. There
+is no light mode.
+
 ## Future Features & Telemetry (Coming Soon)
 A few things are currently in the works and will be pushed in future updates:
 - **Telemetry (Opt-in):** We are planning to add an opt-in telemetry system to collect usage events and improve the extension. Right now, there is only a stub in the code (`telemetry.enabled` defaults to `false` and no-ops), but actual data collection is coming later. No data will leave your machine without your explicit opt-in.
-- **AI Summaries:** We plan to integrate an AI summary feature (using an API key) to summarize videos instead of you having to watch them. This will be implemented as a new stats plugin.
 - **Shorts Blocking:** We'll be adding dedicated support for blocking YouTube Shorts and other specific content types soon.
 
 ---
