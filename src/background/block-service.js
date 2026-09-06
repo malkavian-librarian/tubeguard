@@ -1,6 +1,7 @@
-import {analysisStore,blocklistMeta} from '../shared/storage.js';
+import {analysisStore,blocklistMeta,settings} from '../shared/storage.js';
 import {serializeMutation} from './mutation-queue.js';
-import {safeError} from '../shared/analysis-validation.js';
+import {safeError,assert,VIDEO_ID_PATTERN} from '../shared/analysis-validation.js';
+import {EVIDENCE_LIMITS} from '../shared/analysis-contracts.js';
 
 let expectedSync=null;
 async function writeIds(ids){expectedSync=new Set(ids);try{await chrome.storage.sync.set({blockedChannels:ids});}catch(e){expectedSync=null;throw e;}}
@@ -31,6 +32,16 @@ export async function applyManualBlock({channelId,channelName,action}){
     const owner=await analysisStore.setManualOwnership({channelId,aliases,blocked:action==='block'});
     if(action==='block')await blocklistMeta.put({id:owner.id,type:'channel',name:channelName||owner.id,blockedAt:Date.now(),source:'manual'});
     else {await blocklistMeta.delete(owner.id);for(const alias of owner.aliases)await blocklistMeta.delete(alias);}
+    return {ok:true};
+  });
+}
+export async function applyVideoBlock({videoId,videoTitle,action}){
+  assert(VIDEO_ID_PATTERN.test(videoId));
+  return serializeMutation(async()=>{
+    const current=await settings.get(),ids=new Set(current.blockedVideos);
+    if(action==='block'){ids.add(videoId);await blocklistMeta.put({id:videoId,type:'video',name:String(videoTitle||videoId).slice(0,EVIDENCE_LIMITS.TITLE_BYTES),blockedAt:Date.now()});}
+    else{ids.delete(videoId);await blocklistMeta.delete(videoId);}
+    await chrome.storage.sync.set({blockedVideos:[...ids]});
     return {ok:true};
   });
 }

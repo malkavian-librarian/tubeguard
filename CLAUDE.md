@@ -72,9 +72,14 @@ src/
   popup/
     popup.html / popup.js / popup.css
   shared/
-    storage.js            # Unified storage API
+    storage.js            # Thin barrel re-exporting storage/*.js
+    storage/
+      schema.js           # IndexedDB open/upgrade + low-level request helper
+      transaction.js      # Multi-store transaction/mutation helpers (mutate, charge, checkRun, pageStore, ...)
+      legacy-stores.js     # sessions, blocklistMeta, statsCache, settings
+      analysis-store.js    # analysisStore — daily learning analysis IndexedDB API
     constants.js          # All enums, message types, selector registry
-    message-bus.js        # Typed inter-context messaging
+    message-bus.js        # Typed inter-context messaging (send, sendRequest, sendToTab, onMessage)
     utils.js              # Date math, CSV, telemetry stub
 assets/icons/
 manifest.json
@@ -190,7 +195,7 @@ The `telemetry` object in settings always starts as `{ enabled: false, userId: n
 
 ## Daily learning analysis
 
-- The optional analysis feature stores captures, evidence snapshots, runs, classifications, decisions, and ownership records in IndexedDB through `analysisStore`.
+- The optional analysis feature stores captures, evidence snapshots, runs, classifications, decisions, and ownership records in IndexedDB through `analysisStore` (`src/shared/storage/analysis-store.js`, re-exported from the `src/shared/storage.js` barrel).
 - The OpenRouter key stays in trusted `chrome.storage.local`; it must never appear in logs, exports, IndexedDB records, or UI values returned to a page.
 - Watch checkpoints are immutable deltas tied to a worker-issued capture generation. Each accepted chunk is pinned to the evidence snapshot used for analysis.
 - Only videos longer than five minutes qualify. Automatic channel blocking requires strictly more than 30 minutes of deduplicated, irrelevant active watch time under one priorities revision.

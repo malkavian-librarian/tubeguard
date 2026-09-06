@@ -1,5 +1,6 @@
 import { SELECTORS } from '../shared/constants.js';
 import { parseTranscript, unavailable, readBounded } from './transcript-adapter.js';
+import { EVIDENCE_LIMITS, MAX_TRANSCRIPT_SEGMENTS } from '../shared/analysis-contracts.js';
 const utf8=new TextEncoder();
 function trimBytes(value,max){let text=String(value??'');if(utf8.encode(text).length<=max)return text;while(utf8.encode(text).length>max)text=text.slice(0,Math.max(0,text.length-Math.ceil((utf8.encode(text).length-max)/4)));return text.replace(/[\uD800-\uDBFF]$/,'');}
 function aborted(signal){if(signal?.aborted)throw new DOMException('Navigation changed','AbortError');}
@@ -27,7 +28,7 @@ export async function extractEvidence({document:doc=document,videoId,navigationI
   for(const track of tracks.slice(0,3)){
     try{
       const url=new URL(track.baseUrl);
-      if(url.origin!=='https://www.youtube.com'||url.pathname!=='/api/timedtext'||url.username||url.password||url.searchParams.get('v')!==videoId||url.href.length>8192)continue;
+      if(url.origin!=='https://www.youtube.com'||url.pathname!=='/api/timedtext'||url.username||url.password||url.searchParams.get('v')!==videoId||url.href.length>EVIDENCE_LIMITS.SEGMENT_TEXT_BYTES)continue;
       const allowed=new Set(['v','ei','caps','opi','exp','xoaf','xowf','hl','ip','ipbits','expire','sparams','signature','key','kind','lang','fmt']);
       if([...url.searchParams.keys()].some(k=>!allowed.has(k)))continue;
       url.searchParams.set('fmt','json3');
@@ -37,10 +38,10 @@ export async function extractEvidence({document:doc=document,videoId,navigationI
   }
   aborted(signal);
   if(transcript.status!=='complete'){
-    const segments=[...doc.querySelectorAll(SELECTORS.WATCH_TRANSCRIPT_SEGMENT)].slice(0,20000).map((e,i)=>{const stamp=e.querySelector(SELECTORS.WATCH_TRANSCRIPT_TIMESTAMP)?.textContent.trim()??'';return {id:String(i),startMs:stamp.split(':').reduce((n,v)=>n*60+Number(v),0)*1000,text:trimBytes(e.querySelector(SELECTORS.WATCH_TRANSCRIPT_TEXT)?.textContent,8192)};}).filter(s=>s.text&&Number.isFinite(s.startMs));
+    const segments=[...doc.querySelectorAll(SELECTORS.WATCH_TRANSCRIPT_SEGMENT)].slice(0,MAX_TRANSCRIPT_SEGMENTS).map((e,i)=>{const stamp=e.querySelector(SELECTORS.WATCH_TRANSCRIPT_TIMESTAMP)?.textContent.trim()??'';return {id:String(i),startMs:stamp.split(':').reduce((n,v)=>n*60+Number(v),0)*1000,text:trimBytes(e.querySelector(SELECTORS.WATCH_TRANSCRIPT_TEXT)?.textContent,EVIDENCE_LIMITS.SEGMENT_TEXT_BYTES)};}).filter(s=>s.text&&Number.isFinite(s.startMs));
     if(segments.length)transcript={status:'partial',language:'',source:'transcript-panel',segments:segments.map((s,i)=>({...s,endMs:segments[i+1]?.startMs??s.startMs+1000}))};
   }
   const duration=Number(valid?.lengthSeconds);
-  if(utf8.encode(String(valid?.shortDescription??'')).length>32768||utf8.encode(String(valid?.title??'')).length>2048)transcript.status='partial';
-  return {videoId,navigationId,channelId,channelAliases:aliases,identityProvenance:channelId?(ownerId===channelId?'owner-hyperlink':'active-player+owner-handle'):'',channelName:trimBytes(owner?.textContent||valid?.author,2048),title:trimBytes(valid?.title||doc.querySelector(SELECTORS.WATCH_TITLE)?.textContent||doc.title,2048),description:trimBytes(valid?.shortDescription||doc.querySelector(SELECTORS.WATCH_DESCRIPTION)?.textContent,32768),durationSeconds:Number.isFinite(duration)&&duration>0?duration:null,transcript,capturedAt:Date.now()};
+  if(utf8.encode(String(valid?.shortDescription??'')).length>EVIDENCE_LIMITS.DESCRIPTION_BYTES||utf8.encode(String(valid?.title??'')).length>EVIDENCE_LIMITS.TITLE_BYTES)transcript.status='partial';
+  return {videoId,navigationId,channelId,channelAliases:aliases,identityProvenance:channelId?(ownerId===channelId?'owner-hyperlink':'active-player+owner-handle'):'',channelName:trimBytes(owner?.textContent||valid?.author,EVIDENCE_LIMITS.TITLE_BYTES),title:trimBytes(valid?.title||doc.querySelector(SELECTORS.WATCH_TITLE)?.textContent||doc.title,EVIDENCE_LIMITS.TITLE_BYTES),description:trimBytes(valid?.shortDescription||doc.querySelector(SELECTORS.WATCH_DESCRIPTION)?.textContent,EVIDENCE_LIMITS.DESCRIPTION_BYTES),durationSeconds:Number.isFinite(duration)&&duration>0?duration:null,transcript,capturedAt:Date.now()};
 }

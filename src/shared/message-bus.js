@@ -26,6 +26,16 @@ export function send(type, payload = {}, requestId = null) {
   });
 }
 
+export async function sendRequest(type, payload = {}) {
+  validate(type);
+  const response = await chrome.runtime.sendMessage({ type, payload, requestId: crypto.randomUUID() });
+  if (response?.ok === false) {
+    const message = typeof response.error === 'string' ? response.error : response.error?.message || 'Request failed';
+    throw Object.assign(new Error(message), { code: response.error?.code });
+  }
+  return response;
+}
+
 export function sendToTab(tabId, type, payload = {}) {
   validate(type);
   return new Promise((resolve, reject) => {

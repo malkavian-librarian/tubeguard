@@ -6,7 +6,7 @@ import {drainBlockOutbox} from './block-service.js';
 import {ensureAnalysisAlarm} from './analysis-scheduler.js';
 import {notifyAnalysisSuspended} from './notification.js';
 import {byteLength,safeError} from '../shared/analysis-validation.js';
-import {ANALYSIS_LEASE_MS} from '../shared/analysis-contracts.js';
+import {ANALYSIS_LEASE_MS, ANALYSIS_DAY_MS, ANALYSIS_RETRY_BACKOFF_MS, ANALYSIS_RETRY_ESCALATION_MS} from '../shared/analysis-contracts.js';
 let active=null;
 export function cancelAnalysis(){active?.abort();}
 export async function runDueAnalysis({now=Date.now(),trigger='alarm',classify=classifyPart,leaseMs=ANALYSIS_LEASE_MS}={}){
@@ -29,7 +29,7 @@ export async function runDueAnalysis({now=Date.now(),trigger='alarm',classify=cl
       let persisted=(await analysisStore.getPreparedParts(run)).filter(p=>p.videoId===video.videoId);
       for(const part of persisted){
         if(part.result)continue;
-        if(calls>=1){status='waiting_retry';retryAt=Date.now()+30000;break;}
+        if(calls>=1){status='waiting_retry';retryAt=Date.now()+ANALYSIS_RETRY_BACKOFF_MS;break;}
         if((part.attempts?.length??0)>=4){part.result={verdict:'uncertain',reason:'Retry limit reached',evidenceRefs:[]};continue;}
         const config=await analysisStore.getConfig();
         if(!config.enabled||config.configGeneration!==run.configGeneration)throw Object.assign(Error(),{code:'STALE_GENERATION'});
@@ -44,7 +44,7 @@ export async function runDueAnalysis({now=Date.now(),trigger='alarm',classify=cl
           const retryable=['NETWORK_ERROR','REQUEST_TIMEOUT','RATE_LIMITED','PROVIDER_UNAVAILABLE'].includes(e.code);
           await analysisStore.finishAttempt({...run,attemptId,outcome:{status:retryable?'retryable':'terminal',error:safeError(e)}});
           if(e.code==='PROVIDER_AUTH_ERROR'){status='suspended';break;}
-          if(retryable){status='waiting_retry';retryAt=Date.now()+Math.max([60000,300000,1800000][Math.min(part.attempts?.length??0,2)],e.retryAfterMs||0);break;}
+          if(retryable){status='waiting_retry';retryAt=Date.now()+Math.max(ANALYSIS_RETRY_ESCALATION_MS[Math.min(part.attempts?.length??0,ANALYSIS_RETRY_ESCALATION_MS.length-1)],e.retryAfterMs||0);break;}
           part.result={verdict:'uncertain',reason:safeError(e).message,evidenceRefs:[]};
         }
       }
@@ -57,7 +57,7 @@ export async function runDueAnalysis({now=Date.now(),trigger='alarm',classify=cl
     if(status==='completed'&&batch.videos.length){
       await analysisStore.advanceBatch(run);
       const next=await analysisStore.selectRunBatch({...run,maxVideos:10});
-      if(next.videos.length){status='waiting_retry';retryAt=Date.now()+30000;}
+      if(next.videos.length){status='waiting_retry';retryAt=Date.now()+ANALYSIS_RETRY_BACKOFF_MS;}
     }
     await analysisStore.finishRun({...run,status,retryAt});
     if(status==='suspended')await notifyAnalysisSuspended({now}).catch(()=>{});
@@ -70,7 +70,7 @@ export async function runDueAnalysis({now=Date.now(),trigger='alarm',classify=cl
       await analysisStore.cancelRun({runId:run.runId}).catch(()=>{});
     }else{
       status=e.code==='BUDGET_EXHAUSTED'?'waiting_retry':'completed_with_errors';
-      if(status==='waiting_retry'){const c=await analysisStore.getConfig();const origin=c.budgetOrigin??now;retryAt=origin+(Math.floor((Date.now()-origin)/86400000)+1)*86400000;}
+      if(status==='waiting_retry'){const c=await analysisStore.getConfig();const origin=c.budgetOrigin??now;retryAt=origin+(Math.floor((Date.now()-origin)/ANALYSIS_DAY_MS)+1)*ANALYSIS_DAY_MS;}
       await analysisStore.finishRun({...run,status,retryAt}).catch(()=>{});
     }
   }finally{clearInterval(renewTimer);active=null;await ensureAnalysisAlarm().catch(()=>{});}

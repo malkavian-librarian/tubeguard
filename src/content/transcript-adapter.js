@@ -1,4 +1,5 @@
 import { SELECTORS } from '../shared/constants.js';
+import { EVIDENCE_LIMITS, MAX_TRANSCRIPT_SEGMENTS } from '../shared/analysis-contracts.js';
 export const unavailable = (status='unavailable') => ({status,language:'',source:'',segments:[]});
 export async function readBounded(response, maxBytes) {
   if (Number(response.headers?.get('content-length')) > maxBytes) throw Error('OVERSIZED');
@@ -20,8 +21,8 @@ export function parseTranscript({format,body}) {
       raw=[...doc.querySelectorAll(SELECTORS.TRANSCRIPT_XML_TEXT)].map(e=>({startMs:Math.round(Number(e.getAttribute('start'))*1000),endMs:Math.round((Number(e.getAttribute('start'))+Number(e.getAttribute('dur')))*1000),text:e.textContent.trim()}));
     }else return unavailable();
     raw=raw.filter(s=>s.text);
-    if(raw.length>20000||raw.some(s=>!Number.isSafeInteger(s.startMs)||s.startMs<0||!Number.isSafeInteger(s.endMs)||s.endMs<=s.startMs))return unavailable('partial');
-    if(raw.some(s=>new TextEncoder().encode(s.text).length>8192)||new TextEncoder().encode(raw.map(s=>s.text).join('')).length>2*1024*1024)return unavailable('oversized');
+    if(raw.length>MAX_TRANSCRIPT_SEGMENTS||raw.some(s=>!Number.isSafeInteger(s.startMs)||s.startMs<0||!Number.isSafeInteger(s.endMs)||s.endMs<=s.startMs))return unavailable('partial');
+    if(raw.some(s=>new TextEncoder().encode(s.text).length>EVIDENCE_LIMITS.SEGMENT_TEXT_BYTES)||new TextEncoder().encode(raw.map(s=>s.text).join('')).length>2*1024*1024)return unavailable('oversized');
     return raw.length?{status:'complete',language:'',source:'captions-'+format,segments:raw.map((s,i)=>({id:String(i),...s}))}:unavailable();
   }catch{return unavailable();}
 }

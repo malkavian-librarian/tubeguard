@@ -1,5 +1,6 @@
 import { MessageType, SELECTORS } from '../shared/constants.js';
 import { extractChannelId, extractChannelName, hideElement } from './blocker.js';
+import { sendRequest } from '../shared/message-bus.js';
 
 const injected = new WeakSet();
 
@@ -114,7 +115,7 @@ function makeBlockButton(channelId, channelName, container) {
     'position:relative;z-index:10;'
   ].join('');
 
-  chrome.runtime.sendMessage({ type: MessageType.GET_STATS, payload: { channelId } }).then(res => {
+  sendRequest(MessageType.GET_STATS, { channelId }).then(res => {
     if (res && res.hours !== undefined && res.hours > 0) {
       statsChip.textContent = `${res.hours.toFixed(1)}h`;
       statsChip.style.display = 'inline-flex';
@@ -186,18 +187,12 @@ function styleBtn(text, bg, color, _dark) {
 function doBlock(channelId, channelName, container) {
   tryUnsubscribe(channelName);
 
-  chrome.runtime.sendMessage({
-    type:    MessageType.BLOCK_CHANNEL,
-    payload: { channelId, channelName },
-  }).catch(() => {});
+  sendRequest(MessageType.BLOCK_CHANNEL, { channelId, channelName }).catch(() => {});
 
   if (container) hideElement(container);
 
   showToast(`"${channelName.slice(0, 30)}" blocked.`, () => {
-    chrome.runtime.sendMessage({
-      type:    MessageType.UNBLOCK_CHANNEL,
-      payload: { channelId },
-    }).catch(() => {});
+    sendRequest(MessageType.UNBLOCK_CHANNEL, { channelId }).catch(() => {});
   });
 }
 
@@ -222,23 +217,36 @@ function tryUnsubscribe(channelName) {
 
   if (subBtn) {
     subBtn.click();
-    const checkDialog = setInterval(() => {
-      const dialogs = document.querySelectorAll('tp-yt-paper-dialog, yt-confirm-dialog-renderer');
-      for (const dialog of dialogs) {
-        if (!dialog.offsetParent) continue;
-        for (const cb of dialog.querySelectorAll('button')) {
-          const ct = cb.textContent.trim().toLowerCase();
-          const ca = (cb.getAttribute('aria-label') || '').toLowerCase();
-          if (ct === 'unsubscribe' || ca === 'unsubscribe') {
-            cb.click();
-            clearInterval(checkDialog);
-            return;
-          }
-        }
-      }
-    }, 150);
-    setTimeout(() => clearInterval(checkDialog), 3000);
+    watchForUnsubscribeConfirm();
   }
+}
+
+function clickConfirmIfPresent() {
+  const dialogs = document.querySelectorAll('tp-yt-paper-dialog, yt-confirm-dialog-renderer');
+  for (const dialog of dialogs) {
+    if (!dialog.offsetParent) continue;
+    for (const cb of dialog.querySelectorAll('button')) {
+      const ct = cb.textContent.trim().toLowerCase();
+      const ca = (cb.getAttribute('aria-label') || '').toLowerCase();
+      if (ct === 'unsubscribe' || ca === 'unsubscribe') {
+        cb.click();
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function watchForUnsubscribeConfirm() {
+  if (clickConfirmIfPresent()) return;
+  const observer = new MutationObserver(() => {
+    if (clickConfirmIfPresent()) {
+      observer.disconnect();
+      clearTimeout(timeout);
+    }
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+  const timeout = setTimeout(() => observer.disconnect(), 3000);
 }
 
 // ── Toast ─────────────────────────────────────────────────────────────────────

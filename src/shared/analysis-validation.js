@@ -1,4 +1,5 @@
 import { CHANNEL_ID_PATTERN } from './constants.js';
+import { EVIDENCE_LIMITS, MAX_TRANSCRIPT_SEGMENTS, PRIORITIES_MAX_BYTES } from './analysis-contracts.js';
 export const VIDEO_ID_PATTERN = /^[\w-]{11}$/;
 export const CANONICAL_CHANNEL_PATTERN = /^UC[\w-]{22}$/;
 export function analysisError(code, message = code) { return Object.assign(new Error(message), { code }); }
@@ -17,7 +18,7 @@ export function validateConfigPatch(patch) {
   assert(Object.keys(patch).every(key => allowed.has(key)));
   if ('enabled' in patch) assert(typeof patch.enabled === 'boolean');
   if ('modelId' in patch) assert(/^z-ai\/glm-[\w.-]+$/.test(patch.modelId), 'UNSUPPORTED_MODEL');
-  if ('priorities' in patch) boundedText(patch.priorities, 8 * 1024);
+  if ('priorities' in patch) boundedText(patch.priorities, PRIORITIES_MAX_BYTES);
   if ('apiKey' in patch) { boundedText(patch.apiKey, 4096); assert(patch.apiKey.trim().length > 0); }
   if ('keyAction' in patch) assert(['keep','replace','clear'].includes(patch.keyAction));
   for (const [key, min, max] of [['maxRequestsPer24h',1,1000],['maxInputBytesPer24h',1024,16*1024*1024]]) {
@@ -32,18 +33,18 @@ export function validateEvidence(input) {
   assert(input.durationSeconds == null || (Number.isFinite(input.durationSeconds) && input.durationSeconds > 0));
   const transcript = input.transcript;
   assert(transcript && ['complete','unavailable','pending','partial','oversized','failed'].includes(transcript.status));
-  assert(Array.isArray(transcript.segments) && transcript.segments.length <= 20000);
+  assert(Array.isArray(transcript.segments) && transcript.segments.length <= MAX_TRANSCRIPT_SEGMENTS);
   const segments = transcript.segments.map((segment, index) => {
     assert(Number.isInteger(segment.startMs) && segment.startMs >= 0 && Number.isInteger(segment.endMs) && segment.endMs >= segment.startMs);
-    return { id: String(index), startMs: segment.startMs, endMs: segment.endMs, text: boundedText(segment.text, 8192) };
+    return { id: String(index), startMs: segment.startMs, endMs: segment.endMs, text: boundedText(segment.text, EVIDENCE_LIMITS.SEGMENT_TEXT_BYTES) };
   });
   assert(segments.reduce((sum, segment) => sum + byteLength(segment.text), 0) <= 2 * 1024 * 1024);
   const aliases = input.channelAliases ?? [];
   assert(Array.isArray(aliases) && aliases.length <= 20 && aliases.every(alias => CHANNEL_ID_PATTERN.test(alias)));
   return { videoId: input.videoId, navigationId: input.navigationId, captureEpoch: input.captureEpoch,
-    channelId: input.channelId ?? null, channelName: boundedText(input.channelName ?? '', 2048), channelAliases: [...new Set(aliases)],
-    identityProvenance: boundedText(input.identityProvenance ?? input.provenance ?? '', 2048),
-    title: boundedText(input.title ?? '', 2048), description: boundedText(input.description ?? '', 32768), durationSeconds: input.durationSeconds ?? null,
+    channelId: input.channelId ?? null, channelName: boundedText(input.channelName ?? '', EVIDENCE_LIMITS.TITLE_BYTES), channelAliases: [...new Set(aliases)],
+    identityProvenance: boundedText(input.identityProvenance ?? input.provenance ?? '', EVIDENCE_LIMITS.TITLE_BYTES),
+    title: boundedText(input.title ?? '', EVIDENCE_LIMITS.TITLE_BYTES), description: boundedText(input.description ?? '', EVIDENCE_LIMITS.DESCRIPTION_BYTES), durationSeconds: input.durationSeconds ?? null,
     transcript: { status: transcript.status, language: boundedText(transcript.language ?? '', 128), source: boundedText(transcript.source ?? '', 128), segments },
     capturedAt: Number.isFinite(input.capturedAt) ? input.capturedAt : Date.now(),
   };
