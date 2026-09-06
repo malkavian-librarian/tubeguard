@@ -1,3 +1,7 @@
+> **Superseded — kept for history.** Describes the "TubeReclaim" TypeScript clean-rebuild that
+> never happened. The live codebase is TubeGuard (this repo); see `CLAUDE.md` for current
+> architecture.
+
 # TubeReclaim Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.

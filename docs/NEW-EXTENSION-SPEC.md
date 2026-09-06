@@ -1,3 +1,7 @@
+> **Superseded — kept for history.** Describes the "TubeReclaim" TypeScript clean-rebuild that
+> never happened. The live codebase is TubeGuard (this repo); see `CLAUDE.md` for current
+> architecture.
+
 # TubeReclaim — Build Specification
 
 > **Audience:** an autonomous coding agent (or developer) building this extension from an empty
