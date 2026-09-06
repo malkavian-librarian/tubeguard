@@ -95,12 +95,22 @@ function renderChannelChart(channels) {
   renderBarChart(canvas, top10, { unit: '', maxValue: undefined });
 }
 
+function emptyStateRow(colspan, message) {
+  const tr = document.createElement('tr');
+  const td = document.createElement('td');
+  td.colSpan = colspan;
+  td.className = 'empty-state';
+  td.textContent = message;
+  tr.appendChild(td);
+  return tr;
+}
+
 function renderChannelTable(channels) {
   const tbody  = document.getElementById('channel-tbody');
-  tbody.innerHTML = '';
+  tbody.replaceChildren();
 
   if (!channels.length) {
-    tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No watch history for this period.</td></tr>';
+    tbody.appendChild(emptyStateRow(5, 'No watch history for this period.'));
     return;
   }
 
@@ -111,16 +121,18 @@ function renderChannelTable(channels) {
 
     const avgSec = c.totalSeconds / currentDays;
 
-    tr.innerHTML = `
-      <td class="highlight-name">${esc(c.channelName)}</td>
-      <td>${formatDuration(c.totalSeconds)}</td>
-      <td>${formatDuration(avgSec)}/day</td>
-      <td>${c.lastWatched}</td>
-      <td></td>
-    `;
+    const tdName = document.createElement('td');
+    tdName.className = 'highlight-name';
+    tdName.textContent = c.channelName;
+    const tdTotal = document.createElement('td');
+    tdTotal.textContent = formatDuration(c.totalSeconds);
+    const tdAvg = document.createElement('td');
+    tdAvg.textContent = `${formatDuration(avgSec)}/day`;
+    const tdLast = document.createElement('td');
+    tdLast.textContent = c.lastWatched;
+    const limitTd = document.createElement('td');
+    tr.append(tdName, tdTotal, tdAvg, tdLast, limitTd);
 
-    // Limit input
-    const limitTd = tr.cells[4];
     const inp = document.createElement('input');
     inp.type      = 'number';
     inp.min       = '0';
@@ -144,22 +156,27 @@ function renderChannelTable(channels) {
 
 function renderVideoTable(videos) {
   const tbody = document.getElementById('video-tbody');
-  tbody.innerHTML = '';
+  tbody.replaceChildren();
 
   if (!videos.length) {
-    tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No watch history for this period.</td></tr>';
+    tbody.appendChild(emptyStateRow(5, 'No watch history for this period.'));
     return;
   }
 
   for (const v of applySortOrder('video-table', videos)) {
     const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${esc(v.videoTitle)}</td>
-      <td class="highlight-name">${esc(v.channelName)}</td>
-      <td>${formatDuration(v.totalSeconds)}</td>
-      <td>${v.count}</td>
-      <td>${v.lastWatched}</td>
-    `;
+    const tdTitle = document.createElement('td');
+    tdTitle.textContent = v.videoTitle;
+    const tdChannel = document.createElement('td');
+    tdChannel.className = 'highlight-name';
+    tdChannel.textContent = v.channelName;
+    const tdTotal = document.createElement('td');
+    tdTotal.textContent = formatDuration(v.totalSeconds);
+    const tdCount = document.createElement('td');
+    tdCount.textContent = v.count;
+    const tdLast = document.createElement('td');
+    tdLast.textContent = v.lastWatched;
+    tr.append(tdTitle, tdChannel, tdTotal, tdCount, tdLast);
     tbody.appendChild(tr);
   }
 }
@@ -167,7 +184,7 @@ function renderVideoTable(videos) {
 // ── Blocklist tab ─────────────────────────────────────────────────────────────
 function renderBlocklistTab(filter = '', typeFilter = '') {
   const tbody = document.getElementById('blocklist-tbody');
-  tbody.innerHTML = '';
+  tbody.replaceChildren();
 
   const items = allMeta.filter(m => {
     if (typeFilter && m.type !== typeFilter) return false;
@@ -179,7 +196,7 @@ function renderBlocklistTab(filter = '', typeFilter = '') {
   }).sort((a, b) => b.blockedAt - a.blockedAt);
 
   if (!items.length) {
-    tbody.innerHTML = '<tr><td colspan="4" class="empty-state">No blocked items match the filter.</td></tr>';
+    tbody.appendChild(emptyStateRow(4, 'No blocked items match the filter.'));
     return;
   }
 
@@ -318,14 +335,6 @@ function bindEvents() {
 function setEl(id, val) {
   const el = document.getElementById(id);
   if (el) el.textContent = val;
-}
-
-function esc(str) {
-  return String(str ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
 }
 
 init().catch(console.error);

@@ -1,9 +1,8 @@
 import {MessageType,STORE} from '../shared/constants.js';
+import {sendRequest} from '../shared/message-bus.js';
 const element=(tag,text)=>{const e=document.createElement(tag);if(text!=null)e.textContent=String(text);return e;};
 async function send(type,payload={}){
-  const r=await chrome.runtime.sendMessage({type,payload,requestId:crypto.randomUUID()});
-  if(!r?.ok)throw Error(typeof r?.error==='string'?r.error:r?.error?.message||'Request failed');
-  return r.data;
+  return (await sendRequest(type,payload)).data;
 }
 export function renderEntry(row){
   const article=element('article');
@@ -20,7 +19,7 @@ export function renderEntry(row){
   if(row.description){const d=element('details');d.append(element('summary','Description'),element('p',row.description));article.append(d);}
   if(row.transcript){const d=element('details');d.append(element('summary','Transcript · '+row.transcript.status),element('pre',row.transcript.segments.map(s=>(s.startMs/1000).toFixed(1)+'s '+s.text).join('\n')));article.append(d);}
   if(row.evidenceVersion&&!row.transcript){const button=element('button','View analyzed evidence');button.className='secondary';button.onclick=async()=>{try{const e=await send(MessageType.GET_ANALYSIS_LOG,{videoId:row.videoId,evidenceVersion:row.evidenceVersion});if(e)article.append(renderEntry(e));button.disabled=true;}catch(e){status(e.message);}};article.append(button);}
-  if(row.action==='block'&&row.channelId){const button=element('button','Unblock channel');button.className='secondary';button.onclick=async()=>{const r=await chrome.runtime.sendMessage({type:MessageType.UNBLOCK_CHANNEL,payload:{channelId:row.channelId}});if(r?.ok){button.disabled=true;button.textContent='Unblocked';}else status('Could not unblock channel.');};article.append(button);}
+  if(row.action==='block'&&row.channelId){const button=element('button','Unblock channel');button.className='secondary';button.onclick=async()=>{try{await sendRequest(MessageType.UNBLOCK_CHANNEL,{channelId:row.channelId});button.disabled=true;button.textContent='Unblocked';}catch{status('Could not unblock channel.');}};article.append(button);}
   if(row.runId&&!row.config){const button=element('button','View run configuration');button.className='secondary';button.onclick=async()=>{try{const result=await send(MessageType.GET_ANALYSIS_LOG,{kind:'run',runId:row.runId});const run=result?.items?.[0]??result;if(run?.config){const d=element('details');d.open=true;d.append(element('summary','Priorities and model used'),element('pre',JSON.stringify(run.config,null,2)));article.append(d);}button.disabled=true;}catch(e){status(e.message);}};article.append(button);}
   if(row.config){const d=element('details');d.append(element('summary','Priorities and model used'),element('pre',JSON.stringify(row.config,null,2)));article.append(d);}
   if(row.evidenceRefs?.length)article.append(element('p','Evidence: '+row.evidenceRefs.join(', ')));

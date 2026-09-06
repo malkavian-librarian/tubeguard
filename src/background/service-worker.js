@@ -1,13 +1,14 @@
-﻿import { MessageType, CHANNEL_ID_PATTERN } from '../shared/constants.js';
-import { settings, blocklistMeta, sessions, analysisStore } from '../shared/storage.js';
+﻿import { MessageType } from '../shared/constants.js';
+import { sessions, analysisStore } from '../shared/storage.js';
 import { onMessage } from '../shared/message-bus.js';
 import { registerAlarms, handleAlarm } from './alarm-manager.js';
-import { toDateString, dateRangeStart } from '../shared/utils.js';
+import { dateRangeStart, toDateString } from '../shared/utils.js';
 import { authorizeMessage, validateLegacySetting } from './message-authorization.js';
 import { safeError, assert } from '../shared/analysis-validation.js';
 import { runDueAnalysis, cancelAnalysis } from './analysis-runner.js';
 import { ensureAnalysisAlarm, ANALYSIS_ALARM } from './analysis-scheduler.js';
-import { applyManualBlock, drainBlockOutbox, reconcileExternalBlocks } from './block-service.js';
+import { applyManualBlock, applyVideoBlock, drainBlockOutbox, reconcileExternalBlocks } from './block-service.js';
+import { recordSession } from './session-service.js';
 import { serializeMutation } from './mutation-queue.js';
 import { verifyModel } from './openrouter-client.js';
 
@@ -57,22 +58,11 @@ onMessage(async(msg,sender)=>{
         await broadcastCapture();await ensureAnalysisAlarm();break;
       case MessageType.BLOCK_CHANNEL:return applyManualBlock({...payload,action:'block'});
       case MessageType.UNBLOCK_CHANNEL:return applyManualBlock({...payload,action:'unblock'});
-      case MessageType.BLOCK_VIDEO:
-      case MessageType.UNBLOCK_VIDEO:
-        assert(/^[\w-]{11}$/.test(payload.videoId));
-        return serializeMutation(async()=>{
-          const current=await settings.get(),ids=new Set(current.blockedVideos);
-          if(msg.type===MessageType.BLOCK_VIDEO){ids.add(payload.videoId);await blocklistMeta.put({id:payload.videoId,type:'video',name:String(payload.videoTitle||payload.videoId).slice(0,2048),blockedAt:Date.now()});}
-          else{ids.delete(payload.videoId);await blocklistMeta.delete(payload.videoId);}
-          await chrome.storage.sync.set({blockedVideos:[...ids]});return {ok:true};
-        });
+      case MessageType.BLOCK_VIDEO:return applyVideoBlock({...payload,action:'block'});
+      case MessageType.UNBLOCK_VIDEO:return applyVideoBlock({...payload,action:'unblock'});
       case MessageType.SET_SETTING:
         validateLegacySetting(payload);await chrome.storage.sync.set({[payload.key]:payload.value});return {ok:true};
-      case MessageType.TRACK_SESSION:
-        assert(Number.isFinite(payload.duration)&&payload.duration>0&&payload.duration<=10);
-        assert(/^[\w-]{11}$/.test(payload.videoId));
-        await sessions.add({channelId:CHANNEL_ID_PATTERN.test(payload.channelId)?payload.channelId:'unknown',channelName:String(payload.channelName||'Unknown').slice(0,2048),videoId:payload.videoId,videoTitle:String(payload.videoTitle||payload.videoId).slice(0,2048),startTime:payload.startTime||Date.now(),duration:payload.duration,date:toDateString(new Date(payload.startTime||Date.now()))});
-        return {ok:true};
+      case MessageType.TRACK_SESSION:return recordSession(payload);
       case MessageType.GET_STATS:{
         const all=await sessions.getByDateRange(dateRangeStart(7),toDateString());
         return {hours:all.filter(s=>s.channelId===payload.channelId).reduce((sum,s)=>sum+(s.duration||0),0)/3600};

@@ -1,12 +1,9 @@
 ﻿import { MessageType, SELECTORS } from '../shared/constants.js';
 import { extractEvidence } from './video-evidence.js';
+import { ANALYSIS_MIN_DURATION_SECONDS } from '../shared/analysis-contracts.js';
+import { sendRequest as sendRequestDefault } from '../shared/message-bus.js';
 
-async function request(type,payload){
-  const response=await chrome.runtime.sendMessage({type,payload,requestId:crypto.randomUUID()});
-  if(response?.ok===false)throw Object.assign(new Error(response.error?.code),{code:response.error?.code});
-  return response;
-}
-export function createPlaybackTracker({now=Date.now,monotonicNow=()=>performance.now(),sendRequest=request}={}){
+export function createPlaybackTracker({now=Date.now,monotonicNow=()=>performance.now(),sendRequest=sendRequestDefault}={}){
   let info=null,capture=null,sequence=0,start=null,media=0,queue=[],sending=null,nav=0;
   const flushQueue=()=>{
     if(sending)return sending;
@@ -30,7 +27,7 @@ export function createPlaybackTracker({now=Date.now,monotonicNow=()=>performance
     start=null;await flushQueue();
   };
   return {
-    async navigate(next){const token=++nav;await pause(media);info=next;capture=null;sequence=0;if(next.durationSeconds>300&&Number.isFinite(next.durationSeconds)){try{const r=await sendRequest(MessageType.BEGIN_CAPTURE,{videoId:next.videoId,navigationId:next.navigationId});if(token===nav&&r?.ok)capture=r.data;}catch{}}return capture;},
+    async navigate(next){const token=++nav;await pause(media);info=next;capture=null;sequence=0;if(next.durationSeconds>ANALYSIS_MIN_DURATION_SECONDS&&Number.isFinite(next.durationSeconds)){try{const r=await sendRequest(MessageType.BEGIN_CAPTURE,{videoId:next.videoId,navigationId:next.navigationId});if(token===nav&&r?.ok)capture=r.data;}catch{}}return capture;},
     play,progress(delta){media+=delta;},
     pause,waiting:pause,seeking:pause,hidden:pause,adStart:pause,
     async rateChange(position){await pause(position);play(position);},
@@ -64,9 +61,9 @@ export function initTimeTracker(){
     const evidence=await extractEvidence({videoId,navigationId,signal:controller.signal}).catch(()=>null);
     if(token!==navigation||!evidence)return;
     evidence.durationSeconds??=Number.isFinite(v.duration)&&v.duration>0?v.duration:null;
-    if(!capture&&evidence.durationSeconds>300)capture=await tracker.navigate(evidence);
+    if(!capture&&evidence.durationSeconds>ANALYSIS_MIN_DURATION_SECONDS)capture=await tracker.navigate(evidence);
     if(token!==navigation)return;
-    if(capture)await request(MessageType.UPSERT_VIDEO_EVIDENCE,{...evidence,...capture}).catch(()=>{});
+    if(capture)await sendRequestDefault(MessageType.UPSERT_VIDEO_EVIDENCE,{...evidence,...capture}).catch(()=>{});
     if(active())tracker.play(v.currentTime);
   };
   document.addEventListener('yt-navigate-start',()=>{stop();ready=false;controller?.abort();navigation++;});

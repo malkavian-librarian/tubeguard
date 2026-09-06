@@ -1,6 +1,7 @@
 import {assert} from '../shared/analysis-validation.js';
+import {ANALYSIS_THRESHOLD_MS} from '../shared/analysis-contracts.js';
 export function decideChannel({eligible,alreadyBlocked,irrelevantMs}) {
-  return {action:eligible&&!alreadyBlocked&&Number.isFinite(irrelevantMs)&&irrelevantMs>1800000?'block':'none'};
+  return {action:eligible&&!alreadyBlocked&&Number.isFinite(irrelevantMs)&&irrelevantMs>ANALYSIS_THRESHOLD_MS?'block':'none'};
 }
 export function validateVerdict({part,response}) {
   assert(response&&typeof response==='object'&&!Array.isArray(response),'INVALID_RESPONSE');
