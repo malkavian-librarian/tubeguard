@@ -27,10 +27,23 @@ export function injectBlockButtons() {
     const channelName = extractChannelName(container) || channelId;
     const btn         = makeBlockButton(channelId, channelName, container);
 
-    // Anchor parent needs relative positioning for the button to sit beside it
+    // Anchor parent needs flex layout to keep button visible on same line
     const wrapper = anchor.closest('div') || anchor.parentElement;
     if (!wrapper) continue;
     wrapper.style.position = 'relative';
+    wrapper.style.display = 'flex';
+    wrapper.style.flexWrap = 'nowrap';
+    wrapper.style.alignItems = 'center';
+
+    const textSpan = wrapper.firstElementChild;
+    if (textSpan && !textSpan.classList.contains('tubeguard-block-wrapper')) {
+      textSpan.style.flex = '0 1 auto';
+      textSpan.style.minWidth = '0';
+      textSpan.style.overflow = 'hidden';
+      textSpan.style.textOverflow = 'ellipsis';
+      textSpan.style.whiteSpace = 'nowrap';
+    }
+
     wrapper.appendChild(btn);
     injected.add(container);
   }
