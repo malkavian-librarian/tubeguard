@@ -4,9 +4,10 @@ import {safeError} from '../shared/analysis-validation.js';
 
 let expectedSync=null;
 async function writeIds(ids){expectedSync=new Set(ids);try{await chrome.storage.sync.set({blockedChannels:ids});}catch(e){expectedSync=null;throw e;}}
-export async function drainBlockOutbox(){
+export async function drainBlockOutbox({now=Date.now()}={}){
   return serializeMutation(async()=>{
     for(const intent of await analysisStore.listOutbox()){
+      if(intent.retryAt&&intent.retryAt>now)continue;
       const config=await analysisStore.getConfig(),owner=await analysisStore.getOwnership({channelId:intent.channelId});
       if(!config.enabled||config.generation!==intent.generation||config.configGeneration!==intent.configGeneration||owner?.generation!==intent.ownershipGeneration){await analysisStore.cancelOutbox({decisionId:intent.id,reason:'The analysis configuration or channel ownership changed before the block was applied.'});continue;}
       try{
@@ -16,7 +17,7 @@ export async function drainBlockOutbox(){
         for(const id of intent.ids)ids.add(id);
         await writeIds([...ids]);
         await analysisStore.markOutbox({decisionId:intent.id,generation:intent.generation,status:'applied',insertedIds});
-      }catch(e){await analysisStore.markOutbox({decisionId:intent.id,generation:intent.generation,status:'failed',error:safeError(e)}).catch(()=>{});}
+      }catch(e){await analysisStore.markOutbox({decisionId:intent.id,generation:intent.generation,status:'failed',error:safeError(e),now}).catch(()=>{});}
     }
   });
 }

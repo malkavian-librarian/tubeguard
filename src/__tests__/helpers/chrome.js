@@ -79,7 +79,9 @@ export function installChromeMock(seed = {}) {
     },
     notifications: {
       create: vi.fn(() => Promise.resolve('notification-id')),
+      clear: vi.fn(() => Promise.resolve(true)),
       onButtonClicked: createEvent(),
+      onClicked: createEvent(),
     },
     runtime: {
       getURL: vi.fn((path) => `chrome-extension://test-extension/${path}`),
