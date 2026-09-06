@@ -32,6 +32,57 @@ test('upgrades v1 without losing legacy sessions and adds analysis stores', asyn
   expect((await storage.analysisStore.getConfig()).enabled).toBe(false);
 });
 
+test('upgrades v2 to v3 without losing existing rows and adds the new hot-path indexes', async () => {
+  const channelId = 'UCaaaaaaaaaaaaaaaaaaaaaa';
+  await new Promise((resolve, reject) => {
+    const request = indexedDB.open('tubeguard-db', 2);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      const sessions = db.createObjectStore('sessions', { keyPath: 'id', autoIncrement: true });
+      sessions.createIndex('date', 'date'); sessions.createIndex('channelId', 'channelId'); sessions.createIndex('videoId', 'videoId');
+      sessions.createIndex('captureDate', ['sessionId', 'date'], { unique: true });
+      db.createObjectStore('blocklist-meta', { keyPath: 'id' });
+      db.createObjectStore('stats-cache', { keyPath: 'key' });
+      for (const name of ['videos', 'video-evidence', 'watch-chunks', 'capture-sessions', 'coverage', 'analysis-budgets', 'analysis-inputs', 'block-ownership', 'analysis-runs', 'classifications', 'analysis-decisions', 'block-outbox', 'analysis-state']) {
+        db.createObjectStore(name, { keyPath: 'id' });
+      }
+      const chunks = request.transaction.objectStore('watch-chunks');
+      chunks.createIndex('endedAt', 'endedAt'); chunks.createIndex('videoId', 'videoId'); chunks.createIndex('policyRevision', 'policyRevision');
+      request.transaction.objectStore('analysis-runs').createIndex('status', 'status');
+      request.transaction.objectStore('classifications').createIndex('createdAt', 'createdAt');
+      request.transaction.objectStore('coverage').createIndex('channelId', 'channelId');
+      request.transaction.objectStore('coverage').add({ id: '0:pre-existing-chunk', chunkId: 'pre-existing-chunk', channelId, policyRevision: 0, verdict: 'irrelevant', countedMs: 120000, endedAt: 5000 });
+      request.transaction.objectStore('block-ownership').add({ id: channelId, aliases: ['@legacy-alias'], manual: false, automatic: [], generation: 0, resetAt: 0 });
+    };
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => { request.result.close(); resolve(); };
+  });
+
+  const preUpgradeCoverage = await new Promise((resolve, reject) => {
+    const request = indexedDB.open('tubeguard-db', 2);
+    request.onsuccess = () => {
+      const db = request.result;
+      const tx = db.transaction('coverage', 'readonly').objectStore('coverage').getAll();
+      tx.onsuccess = () => { db.close(); resolve(tx.result); };
+      tx.onerror = () => reject(tx.error);
+    };
+    request.onerror = () => reject(request.error);
+  });
+  expect(preUpgradeCoverage).toHaveLength(1);
+
+  storage = await import('../shared/storage.js');
+
+  const coverageAfter = await storage.analysisStore.getChannelAccounting({ policyRevision: 0, channelId });
+  expect(coverageAfter.irrelevantMs).toBe(120000);
+  expect(coverageAfter.coveredChunkIds).toEqual(['pre-existing-chunk']);
+
+  const ownershipByAlias = await storage.analysisStore.getOwnership({ channelId: '@legacy-alias' });
+  expect(ownershipByAlias.id).toBe(channelId);
+
+  const ownershipDirect = await storage.analysisStore.getOwnership({ channelId });
+  expect(ownershipDirect.id).toBe(channelId);
+});
+
 test('the repository supports capture, leases, audit, deletion and staged secrets', () => {
   for (const method of ['getConfig','saveConfig','getApiKey','reconcileConfig','beginCapture','upsertEvidence','acceptCheckpoint','claimRun','renewRunLease','selectRunBatch','savePreparedParts','beginAttempt','finishAttempt','commitVideoResult','getChannelAccounting','planBlock','finishRun','listHistory','listAnalysisLog','resetChannel','deleteFeatureData','listOutbox','markOutbox','setManualOwnership','getOwnership','exportPage']) {
     expect(storage.analysisStore?.[method], method).toBeTypeOf('function');

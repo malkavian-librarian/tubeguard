@@ -1,8 +1,8 @@
 import { STORE } from '../constants.js';
 import { idbReq } from './schema.js';
 import { transaction, mutate, configIn, charge, checkRun, checkCapture, trustedLocal, pageStore, featureStores, uuid } from './transaction.js';
-import { ANALYSIS_DAY_MS, ANALYSIS_LEASE_MS, ANALYSIS_THRESHOLD_MS, ANALYSIS_MIN_DURATION_SECONDS, publicConfig, OUTBOX_MAX_FAILURES, OUTBOX_RETRY_BASE_MS, OUTBOX_RETRY_CAP_MS } from '../analysis-contracts.js';
-import { assert, validateConfigPatch, validateEvidence, validateCheckpoint, validateSender, CANONICAL_CHANNEL_PATTERN } from '../analysis-validation.js';
+import { ANALYSIS_DAY_MS, ANALYSIS_LEASE_MS, ANALYSIS_THRESHOLD_MS, ANALYSIS_MIN_DURATION_SECONDS, ANALYSIS_RETENTION_MS, publicConfig, OUTBOX_MAX_FAILURES, OUTBOX_RETRY_BASE_MS, OUTBOX_RETRY_CAP_MS } from '../analysis-contracts.js';
+import { assert, validateConfigPatch, validateEvidence, validateCheckpoint, validateSender, CANONICAL_CHANNEL_PATTERN, byteLength } from '../analysis-validation.js';
 
 export const analysisStore = {
   async getConfig() {
@@ -120,8 +120,8 @@ export const analysisStore = {
   async claimRun({now=Date.now(),owner=uuid(),leaseMs=ANALYSIS_LEASE_MS,force=false}) {
     return mutate([STORE.RUNS],async(tx,c)=>{
       if(!c.enabled)return null;
-      const runs=await tx.all(STORE.RUNS);
-      let run=runs.find(r=>['running','waiting_retry','queued'].includes(r.status)&&r.configGeneration===c.configGeneration);
+      const runs=await tx.indexed(STORE.RUNS,'configGeneration',c.configGeneration);
+      let run=runs.find(r=>['running','waiting_retry','queued'].includes(r.status));
       if(run && ((run.leaseToken&&run.leaseExpiresAt>now)||(run.retryAt&&run.retryAt>now)))return null;
       if(!run){
         if(!force && c.nextDueAt>now)return null;
@@ -138,15 +138,16 @@ export const analysisStore = {
       const r=await checkRun(tx,c,ref);if(r.batch)return r.batch;
       const skipped=new Set(r.skippedChunkIds??[]);
       const chunks=(await tx.indexed(STORE.CHUNKS,'policyRevision',r.policyRevision)).filter(x=>(x.endedAt??x.acceptedAt)<=r.cutoff&&x.activeMs>0&&!skipped.has(x.id));
-      const covered=new Set((await tx.all(STORE.COVERAGE)).filter(x=>x.policyRevision===r.policyRevision).map(x=>x.chunkId));
-      const classified=await tx.all(STORE.CLASSIFICATIONS); const videos=[],selected=[];
+      const covered=new Set((await tx.indexed(STORE.COVERAGE,'policyRevision',r.policyRevision)).map(x=>x.chunkId));
+      const videos=[],selected=[];
       for(const candidate of chunks.filter(x=>!covered.has(x.id)&&x.evidenceVersion)){
         const videoId=candidate.videoId, version=candidate.evidenceVersion;
         if(videos.some(v=>v.videoId===videoId))continue;
         const e=await tx.get(STORE.EVIDENCE,videoId+':'+version);
         if(!e||!(e.durationSeconds>ANALYSIS_MIN_DURATION_SECONDS))continue;
         const pending=chunks.filter(x=>x.videoId===videoId&&x.evidenceVersion===version&&!covered.has(x.id));
-        const blocked=new Set(classified.filter(x=>x.videoId===videoId&&x.evidenceVersion===e.evidenceVersion&&x.verdict==='uncertain').flatMap(x=>x.chunkIds));
+        const classified=await tx.indexed(STORE.CLASSIFICATIONS,'videoId_evidenceVersion',[videoId,e.evidenceVersion]);
+        const blocked=new Set(classified.filter(x=>x.verdict==='uncertain').flatMap(x=>x.chunkIds));
         const ready=pending.filter(x=>!blocked.has(x.id));if(!ready.length)continue;
         videos.push(e);selected.push(...ready);if(videos.length>=Math.min(ref.maxVideos??10,10))break;
       }
@@ -156,7 +157,7 @@ export const analysisStore = {
   async savePreparedParts(ref){return mutate([STORE.RUNS,STORE.INPUTS],async(tx,c)=>{await checkRun(tx,c,ref);const ids=[];for(const part of ref.parts){const id=ref.runId+':'+part.videoId+':'+part.part;if(!await tx.get(STORE.INPUTS,id)){const row={...part,id,runId:ref.runId,batchId:ref.batchId,createdAt:Date.now()};await charge(tx,c,row);await tx.put(STORE.INPUTS,row);}ids.push(id);}return {partIds:ids};});},
   async getPreparedParts({runId}){return (await idbReq(STORE.INPUTS,'readonly',s=>s.getAll())).filter(x=>x.runId===runId);},
   async advanceBatch(ref){return mutate([STORE.RUNS],async(tx,c)=>{const r=await checkRun(tx,c,ref);r.cursor=r.batch?.nextCursor??r.cursor;r.skippedChunkIds=[...new Set([...(r.skippedChunkIds??[]),...(r.batch?.chunks??[]).map(x=>x.id)])];r.batch=null;await tx.put(STORE.RUNS,r);});},
-  async getPendingWakeAt(){return mutate([STORE.RUNS],async(tx,c)=>{const rows=(await tx.all(STORE.RUNS)).filter(r=>r.configGeneration===c.configGeneration&&['running','waiting_retry','queued'].includes(r.status));return rows.length?Math.min(...rows.map(r=>r.retryAt||r.leaseExpiresAt||Date.now())):null;});},
+  async getPendingWakeAt(){return mutate([STORE.RUNS],async(tx,c)=>{const rows=(await tx.indexed(STORE.RUNS,'configGeneration',c.configGeneration)).filter(r=>['running','waiting_retry','queued'].includes(r.status));return rows.length?Math.min(...rows.map(r=>r.retryAt||r.leaseExpiresAt||Date.now())):null;});},
   async beginAttempt(ref){
     return mutate([STORE.RUNS,STORE.INPUTS,STORE.BUDGETS],async(tx,c)=>{
       const r=await checkRun(tx,c,ref),part=await tx.get(STORE.INPUTS,ref.partId);assert(part&&part.runId===r.id);
@@ -179,14 +180,14 @@ export const analysisStore = {
     });
   },
   async getChannelAccounting({policyRevision,channelId}){
-    return mutate([STORE.COVERAGE,STORE.OWNERSHIP],async(tx)=>{const o=await tx.get(STORE.OWNERSHIP,channelId),resetAt=o?.resetAt??0;const rows=(await tx.all(STORE.COVERAGE)).filter(x=>x.policyRevision===policyRevision&&x.channelId===channelId&&x.endedAt>resetAt);return {irrelevantMs:rows.reduce((n,x)=>n+x.countedMs,0),resetAt,coveredChunkIds:rows.map(x=>x.chunkId)};});
+    return mutate([STORE.COVERAGE,STORE.OWNERSHIP],async(tx)=>{const o=await tx.get(STORE.OWNERSHIP,channelId),resetAt=o?.resetAt??0;const rows=(await tx.indexed(STORE.COVERAGE,'policyRevision_channelId',[policyRevision,channelId])).filter(x=>x.endedAt>resetAt);return {irrelevantMs:rows.reduce((n,x)=>n+x.countedMs,0),resetAt,coveredChunkIds:rows.map(x=>x.chunkId)};});
   },
   async planBlock(ref){
     return mutate([STORE.RUNS,STORE.COVERAGE,STORE.OWNERSHIP,STORE.OUTBOX,STORE.DECISIONS],async(tx,c)=>{
       const r=await checkRun(tx,c,ref);if(!CANONICAL_CHANNEL_PATTERN.test(ref.channelId))return null;
       const o=await tx.get(STORE.OWNERSHIP,ref.channelId)||{id:ref.channelId,aliases:[],manual:false,automatic:[],generation:0,resetAt:0};
       if(o.manual||o.automatic.length)return null;
-      const rows=(await tx.all(STORE.COVERAGE)).filter(x=>x.policyRevision===r.policyRevision&&x.channelId===ref.channelId&&x.endedAt>o.resetAt);
+      const rows=(await tx.indexed(STORE.COVERAGE,'policyRevision_channelId',[r.policyRevision,ref.channelId])).filter(x=>x.endedAt>o.resetAt);
       const ms=rows.reduce((n,x)=>n+x.countedMs,0);if(ms<=ANALYSIS_THRESHOLD_MS)return null;
       const e=r.batch?.videos.find(v=>v.channelId===ref.channelId);o.aliases=[...new Set([...o.aliases,...(e?.channelAliases??[])])];
       const d={id:uuid(),runId:r.id,channelId:ref.channelId,policyRevision:r.policyRevision,createdAt:Date.now(),countedMs:ms,thresholdMs:ANALYSIS_THRESHOLD_MS,chunkIds:rows.map(x=>x.chunkId),action:'block',status:'pending',generation:c.generation,configGeneration:c.configGeneration,ownershipGeneration:o.generation};
@@ -198,6 +199,31 @@ export const analysisStore = {
   // reject a normal finishRun on such a run (that's precisely why it would otherwise be left
   // stuck 'running' forever), so this bypasses the generation/lease guard deliberately.
   async cancelRun({runId}){return mutate([STORE.RUNS],async(tx)=>{const r=await tx.get(STORE.RUNS,runId);if(!r||!['running','waiting_retry','queued'].includes(r.status))return;r.status='cancelled';r.retryAt=null;r.leaseToken=null;r.leaseExpiresAt=0;r.batch=null;await tx.put(STORE.RUNS,r);});},
+  async pruneAging({now=Date.now(),retentionMs=ANALYSIS_RETENTION_MS}={}){
+    return mutate([STORE.RUNS,STORE.INPUTS,STORE.CLASSIFICATIONS,STORE.COVERAGE,STORE.CHUNKS,STORE.CAPTURES,STORE.EVIDENCE],async(tx,c)=>{
+      const cutoff=now-retentionMs;let prunedCount=0,freedBytes=0;const deadRunIds=new Set();
+      const drop=async(store,row)=>{await tx.delete(store,row.id);prunedCount++;freedBytes+=byteLength(row);};
+      // never prune rows tagged with the live configGeneration/policyRevision: they still feed
+      // getChannelAccounting/planBlock's lifetime-to-date accounting for the active channel.
+      for(const r of await tx.all(STORE.RUNS)){
+        if(['completed','completed_with_errors','cancelled'].includes(r.status)&&r.createdAt<cutoff&&r.configGeneration!==c.configGeneration){
+          deadRunIds.add(r.id);await drop(STORE.RUNS,r);
+        }
+      }
+      for(const row of await tx.all(STORE.INPUTS))if(deadRunIds.has(row.runId))await drop(STORE.INPUTS,row);
+      const belowCurrentRevision=IDBKeyRange.upperBound(c.policyRevision,true);
+      for(const row of await tx.indexed(STORE.COVERAGE,'policyRevision',belowCurrentRevision))if((row.endedAt??0)<cutoff)await drop(STORE.COVERAGE,row);
+      for(const row of await tx.indexed(STORE.CLASSIFICATIONS,'policyRevision',belowCurrentRevision))if(row.createdAt<cutoff)await drop(STORE.CLASSIFICATIONS,row);
+      for(const row of await tx.indexed(STORE.CHUNKS,'policyRevision',belowCurrentRevision))if((row.endedAt??row.acceptedAt??0)<cutoff)await drop(STORE.CHUNKS,row);
+      for(const row of await tx.all(STORE.CAPTURES))if(row.policyRevision!==c.policyRevision&&row.createdAt<cutoff)await drop(STORE.CAPTURES,row);
+      const live=new Set();
+      for(const row of await tx.all(STORE.CAPTURES))if(row.evidenceVersion)live.add(row.videoId+':'+row.evidenceVersion);
+      for(const row of await tx.all(STORE.CHUNKS))if(row.evidenceVersion)live.add(row.videoId+':'+row.evidenceVersion);
+      for(const row of await tx.all(STORE.EVIDENCE))if(!live.has(row.id))await drop(STORE.EVIDENCE,row);
+      if(freedBytes>0){c.storageBytes=Math.max(0,c.storageBytes-freedBytes);await tx.put(STORE.STATE,c);}
+      return {prunedCount,freedBytes};
+    });
+  },
   async listHistory(params){const page=await pageStore(STORE.VIDEOS,params);page.items=(await Promise.all(page.items.filter(v=>v.durationSeconds>ANALYSIS_MIN_DURATION_SECONDS&&v.watchMs>0).map(async v=>({...v,...await this.getEvidence(v),watchMs:v.watchMs}))));return page;},
   async getEvidence({videoId,evidenceVersion}){return idbReq(STORE.EVIDENCE,'readonly',s=>s.get(videoId+':'+evidenceVersion));},
   async listAnalysisLog({kind='classification',...params}={}){
@@ -206,7 +232,13 @@ export const analysisStore = {
     return page;
   },
   async listDecisions(params){return pageStore(STORE.DECISIONS,params);},
-  async getOwnership({channelId}){const all=await idbReq(STORE.OWNERSHIP,'readonly',s=>s.getAll());return all.find(o=>o.id===channelId||o.aliases?.includes(channelId));},
+  async getOwnership({channelId}){
+    return transaction([STORE.OWNERSHIP],'readonly',async tx=>{
+      const direct=await tx.get(STORE.OWNERSHIP,channelId);
+      if(direct)return direct;
+      return (await tx.index(STORE.OWNERSHIP,'aliases',channelId))??undefined;
+    });
+  },
   async setManualOwnership({channelId,aliases=[],blocked,at=Date.now()}){
     assert(/^UC[\w-]{22}$|^@[\w.-]+$/.test(channelId));
     return mutate([STORE.OWNERSHIP,STORE.OUTBOX],async(tx)=>{const all=await tx.all(STORE.OWNERSHIP);const o=all.find(x=>x.id===channelId||x.aliases?.includes(channelId))||{id:channelId,aliases:[],automatic:[],generation:0,resetAt:0};o.aliases=[...new Set([...o.aliases,...aliases])];o.manual=blocked;if(!blocked){o.automatic=[];o.resetAt=at;o.generation++;for(const entry of await tx.all(STORE.OUTBOX))if(entry.channelId===o.id)await tx.delete(STORE.OUTBOX,entry.id);}await tx.put(STORE.OWNERSHIP,o);return o;});

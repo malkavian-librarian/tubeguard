@@ -37,8 +37,8 @@ export function createPlaybackTracker({now=Date.now,monotonicNow=()=>performance
   };
 }
 
-export function initTimeTracker(){
-  const tracker=createPlaybackTracker();let video=null,controller=null,dispose=[],navigation=0,ready=false,lastPosition=0,lastCheckpoint=0,blocked=false;
+export function initTimeTracker({sendRequest=sendRequestDefault}={}){
+  const tracker=createPlaybackTracker({sendRequest});let video=null,controller=null,dispose=[],navigation=0,ready=false,lastPosition=0,lastCheckpoint=0,blocked=false;
   const active=()=>video&&!video.paused&&!video.ended&&!video.seeking&&!document.hidden&&!blocked&&!document.querySelector(SELECTORS.WATCH_AD);
   const stop=()=>{if(video)void tracker.pause(lastPosition);};
   const attach=async()=>{
@@ -70,8 +70,24 @@ export function initTimeTracker(){
   document.addEventListener('yt-navigate-finish',()=>{ready=false;void attach();});
   document.addEventListener('visibilitychange',()=>{if(document.hidden)stop();else if(active())tracker.play(video.currentTime);});
   window.addEventListener('pagehide',stop);
-  chrome.runtime.onMessage.addListener(msg=>{if(msg?.type===MessageType.CAPTURE_POLICY_CHANGED){stop();ready=false;void attach();}});
-  const observer=new MutationObserver(()=>{if(document.querySelector(SELECTORS.WATCH_AD))stop();if(document.querySelector(SELECTORS.WATCH_VIDEO)!==video||!ready)void attach();});
-  observer.observe(document.documentElement,{childList:true,subtree:true,attributes:true,attributeFilter:['class']});
+
+  // the full-subtree attribute observer only exists to catch ad/video-swap DOM churn the
+  // analysis feature needs (see attach()'s WATCH_AD/re-attach checks below); it stays
+  // disconnected unless that feature is enabled, since it fires on every class mutation
+  // across the whole document on every YouTube tab.
+  let featureObserver=null;
+  const startFeatureObserver=()=>{
+    if(featureObserver)return;
+    featureObserver=new MutationObserver(()=>{if(document.querySelector(SELECTORS.WATCH_AD))stop();if(document.querySelector(SELECTORS.WATCH_VIDEO)!==video||!ready)void attach();});
+    featureObserver.observe(document.documentElement,{childList:true,subtree:true,attributes:true,attributeFilter:['class']});
+  };
+  const stopFeatureObserver=()=>{if(featureObserver){featureObserver.disconnect();featureObserver=null;}};
+  const syncFeatureObserver=async()=>{
+    try{const r=await sendRequest(MessageType.GET_AI_SETTINGS);if(r?.ok!==false&&r?.data?.enabled)startFeatureObserver();else stopFeatureObserver();}
+    catch{stopFeatureObserver();}
+  };
+
+  chrome.runtime.onMessage.addListener(msg=>{if(msg?.type===MessageType.CAPTURE_POLICY_CHANGED){stop();ready=false;void attach();void syncFeatureObserver();}});
+  void syncFeatureObserver();
   void attach();
 }
