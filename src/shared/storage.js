@@ -1,5 +1,5 @@
 import { DB_NAME, DB_VERSION, STORE, DEFAULT_SETTINGS } from './constants.js';
-import { DEFAULT_AI_CONFIG, ANALYSIS_DAY_MS, publicConfig, ANALYSIS_ADMISSION_BYTES } from './analysis-contracts.js';
+import { DEFAULT_AI_CONFIG, ANALYSIS_DAY_MS, publicConfig, ANALYSIS_ADMISSION_BYTES, OUTBOX_MAX_FAILURES, OUTBOX_RETRY_BASE_MS, OUTBOX_RETRY_CAP_MS } from './analysis-contracts.js';
 import { assert, analysisError, validateConfigPatch, validateEvidence, validateCheckpoint, validateSender, byteLength, CANONICAL_CHANNEL_PATTERN } from './analysis-validation.js';
 
 let _db = null;
@@ -194,7 +194,7 @@ export const analysisStore = {
   async saveConfig(patch) {
     validateConfigPatch(patch); const local = await trustedLocal(); let slot;
     if (patch.apiKey) { slot = 'ai-key-' + uuid(); await local.set({ [slot]: patch.apiKey.trim() }); }
-    await mutate([], async (tx, c) => {
+    await mutate([STORE.RUNS], async (tx, c) => {
       const now = patch.now ?? Date.now(), oldEnabled = c.enabled;
       if (slot) c.keySlotId = slot;
       if (patch.keyAction === 'clear') { c.keySlotId = null; c.enabled = false; }
@@ -203,8 +203,13 @@ export const analysisStore = {
       if (c.enabled) assert(c.keySlotId && c.priorities.trim(), 'CONFIG_INCOMPLETE');
       if (changedPolicy || (!oldEnabled && c.enabled)) { c.policyRevision++; c.epochStartedAt = now; }
       if (!oldEnabled && c.enabled && c.epochStartedAt !== null) c.generation = uuid();
+      // an in-flight run pinned to the pre-bump configGeneration is about to be orphaned by
+      // checkRun's STALE_GENERATION guard; without resetting nextDueAt, analysis would otherwise
+      // stall until the next calendar day instead of resuming this run's work today.
+      const orphansActiveRun = (await tx.all(STORE.RUNS)).some(r => ['running','waiting_retry','queued'].includes(r.status) && r.configGeneration === c.configGeneration);
       c.configGeneration++;
       if (c.enabled && !oldEnabled) c.nextDueAt = now + ANALYSIS_DAY_MS;
+      else if (orphansActiveRun) c.nextDueAt = now;
       if (c.budgetOrigin == null && c.enabled) c.budgetOrigin = now;
       await tx.put(STORE.STATE, c);
     });
@@ -365,6 +370,10 @@ export const analysisStore = {
     });
   },
   async finishRun(ref){return mutate([STORE.RUNS],async(tx,c)=>{const r=await checkRun(tx,c,ref);r.status=ref.status;r.retryAt=ref.retryAt??null;r.leaseToken=null;r.leaseExpiresAt=0;if(ref.status==='completed'||ref.status==='completed_with_errors')r.batch=null;await tx.put(STORE.RUNS,r);if(ref.nextDueAt!=null){c.nextDueAt=ref.nextDueAt;await tx.put(STORE.STATE,c);}});},
+  // administrative close-out for a run orphaned by STALE_GENERATION/LEASE_LOST: checkRun would
+  // reject a normal finishRun on such a run (that's precisely why it would otherwise be left
+  // stuck 'running' forever), so this bypasses the generation/lease guard deliberately.
+  async cancelRun({runId}){return mutate([STORE.RUNS],async(tx)=>{const r=await tx.get(STORE.RUNS,runId);if(!r||!['running','waiting_retry','queued'].includes(r.status))return;r.status='cancelled';r.retryAt=null;r.leaseToken=null;r.leaseExpiresAt=0;r.batch=null;await tx.put(STORE.RUNS,r);});},
   async listHistory(params){const page=await pageStore(STORE.VIDEOS,params);page.items=(await Promise.all(page.items.filter(v=>v.durationSeconds>300&&v.watchMs>0).map(async v=>({...v,...await this.getEvidence(v),watchMs:v.watchMs}))));return page;},
   async getEvidence({videoId,evidenceVersion}){return idbReq(STORE.EVIDENCE,'readonly',s=>s.get(videoId+':'+evidenceVersion));},
   async listAnalysisLog({kind='classification',...params}={}){
@@ -379,15 +388,38 @@ export const analysisStore = {
     return mutate([STORE.OWNERSHIP,STORE.OUTBOX],async(tx)=>{const all=await tx.all(STORE.OWNERSHIP);const o=all.find(x=>x.id===channelId||x.aliases?.includes(channelId))||{id:channelId,aliases:[],automatic:[],generation:0,resetAt:0};o.aliases=[...new Set([...o.aliases,...aliases])];o.manual=blocked;if(!blocked){o.automatic=[];o.resetAt=at;o.generation++;for(const entry of await tx.all(STORE.OUTBOX))if(entry.channelId===o.id)await tx.delete(STORE.OUTBOX,entry.id);}await tx.put(STORE.OWNERSHIP,o);return o;});
   },
   async resetChannel({channelId,at}){return this.setManualOwnership({channelId,blocked:false,at});},
-  async listOutbox(){return (await idbReq(STORE.OUTBOX,'readonly',s=>s.getAll())).filter(x=>x.status!=='applied');},
+  async listOutbox(){return (await idbReq(STORE.OUTBOX,'readonly',s=>s.getAll())).filter(x=>!['applied','cancelled'].includes(x.status));},
   async stageOutbox({decisionId,generation,insertedIds,preexistingIds}){
     return mutate([STORE.OUTBOX],async(tx,c)=>{assert(c.generation===generation,'STALE_GENERATION');const row=await tx.get(STORE.OUTBOX,decisionId);assert(row,'MISSING_OUTBOX');row.status='applying';row.insertedIds=[...new Set(insertedIds)];row.preexistingIds=[...new Set(preexistingIds)];await tx.put(STORE.OUTBOX,row);return row;});
   },
   async cancelOutbox({decisionId,reason='stale'}){
     return mutate([STORE.OUTBOX,STORE.DECISIONS,STORE.OWNERSHIP],async tx=>{const row=await tx.get(STORE.OUTBOX,decisionId);if(!row)return;row.status='cancelled';row.error={code:'CANCELLED',message:reason};await tx.put(STORE.OUTBOX,row);const d=await tx.get(STORE.DECISIONS,decisionId);if(d){d.status='cancelled';d.error=row.error;await tx.put(STORE.DECISIONS,d);}const o=await tx.get(STORE.OWNERSHIP,row.channelId);if(o){o.automatic=(o.automatic??[]).filter(id=>id!==decisionId);await tx.put(STORE.OWNERSHIP,o);}});
   },
-  async markOutbox({decisionId,generation,status,error,insertedIds=[]}){
-    return mutate([STORE.OUTBOX,STORE.DECISIONS,STORE.OWNERSHIP,STORE.BLOCKLIST_META],async(tx,c)=>{assert(c.generation===generation,'STALE_GENERATION');const row=await tx.get(STORE.OUTBOX,decisionId);if(!row)return;row.status=status;row.error=error;await tx.put(STORE.OUTBOX,row);const d=await tx.get(STORE.DECISIONS,decisionId);if(d){d.status=status;d.error=error;await tx.put(STORE.DECISIONS,d);}if(status==='applied'){const o=await tx.get(STORE.OWNERSHIP,row.channelId);o.insertedIds=[...new Set([...(o.insertedIds??[]),...insertedIds])];await tx.put(STORE.OWNERSHIP,o);await tx.put(STORE.BLOCKLIST_META,{id:row.channelId,type:'channel',name:row.channelId,blockedAt:Date.now(),source:'automatic'});}});
+  async markOutbox({decisionId,generation,status,error,insertedIds=[],now=Date.now()}){
+    return mutate([STORE.OUTBOX,STORE.DECISIONS,STORE.OWNERSHIP,STORE.BLOCKLIST_META],async(tx,c)=>{
+      assert(c.generation===generation,'STALE_GENERATION');
+      const row=await tx.get(STORE.OUTBOX,decisionId);if(!row)return;
+      if(status==='failed'){
+        row.failureCount=(row.failureCount??0)+1;
+        if(row.failureCount>=OUTBOX_MAX_FAILURES){
+          // give up permanently rather than retry forever: clear ownership.automatic (mirrors
+          // cancelOutbox) so the channel becomes re-plannable instead of being stuck forever.
+          row.status='cancelled';row.retryAt=null;row.error={code:'OUTBOX_EXHAUSTED',message:'Blocking failed repeatedly and was abandoned.'};
+          await tx.put(STORE.OUTBOX,row);
+          const d=await tx.get(STORE.DECISIONS,decisionId);if(d){d.status='cancelled';d.error=row.error;await tx.put(STORE.DECISIONS,d);}
+          const o=await tx.get(STORE.OWNERSHIP,row.channelId);if(o){o.automatic=(o.automatic??[]).filter(id=>id!==decisionId);await tx.put(STORE.OWNERSHIP,o);}
+          return;
+        }
+        row.status='failed';row.error=error;
+        row.retryAt=now+Math.min(OUTBOX_RETRY_CAP_MS,OUTBOX_RETRY_BASE_MS*2**(row.failureCount-1));
+        await tx.put(STORE.OUTBOX,row);
+        const d=await tx.get(STORE.DECISIONS,decisionId);if(d){d.status=status;d.error=error;await tx.put(STORE.DECISIONS,d);}
+        return;
+      }
+      row.status=status;row.error=error;await tx.put(STORE.OUTBOX,row);
+      const d=await tx.get(STORE.DECISIONS,decisionId);if(d){d.status=status;d.error=error;await tx.put(STORE.DECISIONS,d);}
+      if(status==='applied'){const o=await tx.get(STORE.OWNERSHIP,row.channelId);o.insertedIds=[...new Set([...(o.insertedIds??[]),...insertedIds])];await tx.put(STORE.OWNERSHIP,o);await tx.put(STORE.BLOCKLIST_META,{id:row.channelId,type:'channel',name:row.channelId,blockedAt:Date.now(),source:'automatic'});}
+    });
   },
   async listAutomaticBlockIds(){return [...new Set((await idbReq(STORE.OWNERSHIP,'readonly',s=>s.getAll())).filter(o=>!o.manual&&(o.automatic?.length||o.insertedIds?.length)).flatMap(o=>o.insertedIds??[]))];},
   async exportPage({store=STORE.VIDEOS,generation,...params}={}){const c=await this.getConfig();assert(!generation||generation===c.generation,'STALE_GENERATION');const page=await pageStore(store,params);return {...page,generation:c.generation};},

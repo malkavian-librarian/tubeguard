@@ -2,6 +2,10 @@ export const ANALYSIS_DAY_MS = 86_400_000;
 export const ANALYSIS_ADMISSION_BYTES = 245 * 1024 * 1024;
 export const ANALYSIS_MAX_BYTES = 250 * 1024 * 1024;
 export const ANALYSIS_THRESHOLD_MS = 1_800_000;
+export const ANALYSIS_LEASE_MS = 120_000;
+export const OUTBOX_MAX_FAILURES = 5;
+export const OUTBOX_RETRY_BASE_MS = 30_000;
+export const OUTBOX_RETRY_CAP_MS = 6 * 60 * 60 * 1000;
 export const DEFAULT_AI_CONFIG = Object.freeze({
   enabled: false, modelId: 'z-ai/glm-4.7', priorities: '', policyRevision: 0,
   configGeneration: 0, maxRequestsPer24h: 50, maxInputBytesPer24h: 1_048_576,

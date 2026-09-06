@@ -4,17 +4,22 @@ import {aggregateVerdicts} from './analysis-policy.js';
 import {classifyPart} from './openrouter-client.js';
 import {drainBlockOutbox} from './block-service.js';
 import {ensureAnalysisAlarm} from './analysis-scheduler.js';
+import {notifyAnalysisSuspended} from './notification.js';
 import {byteLength,safeError} from '../shared/analysis-validation.js';
+import {ANALYSIS_LEASE_MS} from '../shared/analysis-contracts.js';
 let active=null;
 export function cancelAnalysis(){active?.abort();}
-export async function runDueAnalysis({now=Date.now(),trigger='alarm',classify=classifyPart}={}){
+export async function runDueAnalysis({now=Date.now(),trigger='alarm',classify=classifyPart,leaseMs=ANALYSIS_LEASE_MS}={}){
   if(active)return null;
-  const run=await analysisStore.claimRun({now,owner:crypto.randomUUID(),leaseMs:120000,force:trigger==='manual'});
+  const run=await analysisStore.claimRun({now,owner:crypto.randomUUID(),leaseMs,force:trigger==='manual'});
   if(!run)return null;
   const controller=new AbortController();active=controller;
   let status='completed',retryAt=null;
+  // a single classify() call can outlive the lease (large prompt, slow provider); renew it
+  // periodically so a second worker/alarm firing cannot reclaim and double-process this run.
+  const renewTimer=setInterval(()=>{analysisStore.renewRunLease({...run,now:Date.now(),leaseMs}).catch(()=>{});},Math.max(50,Math.floor(leaseMs/3)));
   try{
-    await ensureAnalysisAlarm({wakeAt:now+120000});
+    await ensureAnalysisAlarm({wakeAt:now+leaseMs});
     const batch=await analysisStore.selectRunBatch({...run,maxVideos:10});
     let calls=0;
     for(const video of batch.videos){
@@ -55,12 +60,19 @@ export async function runDueAnalysis({now=Date.now(),trigger='alarm',classify=cl
       if(next.videos.length){status='waiting_retry';retryAt=Date.now()+30000;}
     }
     await analysisStore.finishRun({...run,status,retryAt});
+    if(status==='suspended')await notifyAnalysisSuspended({now}).catch(()=>{});
   }catch(e){
-    if(!['STALE_GENERATION','LEASE_LOST'].includes(e.code)){
+    if(['STALE_GENERATION','LEASE_LOST'].includes(e.code)){
+      // checkRun would reject a normal finishRun here (that mismatch is exactly what's being
+      // caught) — cancelRun closes the row out administratively so it doesn't stay 'running'
+      // forever and block same-day resumption (saveConfig resets nextDueAt for this case).
+      status='cancelled';
+      await analysisStore.cancelRun({runId:run.runId}).catch(()=>{});
+    }else{
       status=e.code==='BUDGET_EXHAUSTED'?'waiting_retry':'completed_with_errors';
       if(status==='waiting_retry'){const c=await analysisStore.getConfig();const origin=c.budgetOrigin??now;retryAt=origin+(Math.floor((Date.now()-origin)/86400000)+1)*86400000;}
       await analysisStore.finishRun({...run,status,retryAt}).catch(()=>{});
     }
-  }finally{active=null;await ensureAnalysisAlarm().catch(()=>{});}
+  }finally{clearInterval(renewTimer);active=null;await ensureAnalysisAlarm().catch(()=>{});}
   return {runId:run.runId,status};
 }
